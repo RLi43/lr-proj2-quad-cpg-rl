@@ -1,3 +1,11 @@
+'''
+Author: Chengkun Li
+LastEditors: Chengkun Li
+Date: 2021-11-30 01:47:27
+LastEditTime: 2021-11-30 15:00:39
+Description: Legged Robot Project 2 CPG & HOPF Network part
+FilePath: /lr-proj2-quad-cpg-rl/hopf_network.py
+'''
 """
 CPG in polar coordinates based on: 
 Pattern generators with sensory feedback for the control of quadruped
@@ -6,6 +14,7 @@ https://ieeexplore.ieee.org/stamp/stamp.jsp?arnumber=4543306
 
 """
 import time
+# from loguru import logger
 import numpy as np
 import matplotlib
 from sys import platform
@@ -27,9 +36,9 @@ class HopfNetwork():
   """
   def __init__(self,
                 mu=1**2,                # converge to sqrt(mu)
-                omega_swing=1*2*np.pi,  # MUST EDIT
-                omega_stance=1*2*np.pi, # MUST EDIT
-                gait="TROT",            # change depending on desired gait
+                omega_swing=10*2*np.pi,  # MUST EDIT
+                omega_stance=10*2*np.pi, # MUST EDIT
+                gait="PACE",            # change depending on desired gait
                 coupling_strength=1,    # coefficient to multiply coupling matrix
                 couple=True,            # should couple
                 time_step=0.001,        # time step 
@@ -67,10 +76,43 @@ class HopfNetwork():
     """ For coupling oscillators in phase space. 
     [TODO] update all coupling matrices
     """
-    self.PHI_trot = np.zeros((4,4))
-    self.PHI_walk = np.zeros((4,4))
-    self.PHI_bound = np.zeros((4,4))
-    self.PHI_pace = np.zeros((4,4))
+    self.PHI_trot = np.array(
+      ((0, np.pi, np.pi, 0),
+       (-np.pi, 0, 0, -np.pi),
+       (-np.pi, 0, 0, -np.pi),
+       (0, np.pi, np.pi, 0))
+    )
+    # FR _xxxxxxx__
+    # FL xxx___xxxx
+    # RR xx___xxxxx
+    # RL xxxxxxx___
+    p = 0.4
+    self.PHI_walk = np.array(
+      ((0, p*np.pi, np.pi, (1+p)*np.pi),
+       (-p*np.pi, 0, (1-p)*np.pi, np.pi),
+       (-np.pi, (1-p)*np.pi, 0, p*np.pi),
+       ((-1-p)*np.pi, -np.pi, -p*np.pi, 0))
+    )
+    # FR xxx_______ 
+    # FL xxx_______
+    # RR ____xxx___
+    # RL ____xxx___
+    self.PHI_bound = np.array(
+      ((0, 0, np.pi, np.pi),
+       (0, 0, np.pi, np.pi),
+       (-np.pi, -np.pi,0, 0),
+       (-np.pi, -np.pi,0, 0))
+    )
+    # FR xx__________
+    # FL ___xx_______
+    # RR ______xx____
+    # RL _________xx_
+    self.PHI_pace = np.array(
+      ((0, 0.5*np.pi, np.pi, 1.5*np.pi),
+       (-0.5*np.pi, 0, 0.5*np.pi, np.pi),
+       (-np.pi, -0.5*np.pi, 0, 0.5*np.pi),
+       (-1.5*np.pi, -np.pi, -0.5*np.pi, 0))
+    )
 
     if gait == "TROT":
       print('TROT')
@@ -87,7 +129,7 @@ class HopfNetwork():
     else:
       raise ValueError( gait + 'not implemented.')
 
-
+  # @logger.catch
   def update(self):
     """ Update oscillator states. """
 
@@ -95,9 +137,12 @@ class HopfNetwork():
     self._integrate_hopf_equations()
     
     # map CPG variables to Cartesian foot xz positions (Equations 8, 9) 
-    x = np.zeros(4) # [TODO]
-    z = np.zeros(4) # [TODO]
-
+    r, theta = self.X[0, :], self.X[1, :]
+    x = -self._des_step_len * r * np.cos(theta)
+    z = np.zeros(4)
+    for i in range(4):
+      z[i] = -self._robot_height + self._ground_clearance * np.sin(theta[i]) if np.sin(theta[i]) > 0 \
+        else -self._robot_height + self._ground_penetration * np.sin(theta[i]) 
     return x, z
       
         
@@ -111,21 +156,27 @@ class HopfNetwork():
     # loop through each leg's oscillator
     for i in range(4):
       # get r_i, theta_i from X
-      r, theta = 0, 0 # [TODO]
+      r, theta = X[0, i], X[1, i] 
       # compute r_dot (Equation 6)
-      r_dot = 0 # [TODO]
+      r_dot = alpha * (self._mu - r**2) * r
       # determine whether oscillator i is in swing or stance phase to set natural frequency omega_swing or omega_stance (see Section 3)
-      theta_dot = 0 # [TODO]
+      omega = self._omega_swing if theta % 2*np.pi <= np.pi else self._omega_stance
+      theta_dot = omega
 
       # loop through other oscillators to add coupling (Equation 7)
       if self._couple:
-        theta_dot += 0 # [TODO]
+        sum_rwsin = 0
+        for j in range(4):
+          if j != i:
+            r_j, theta_j = X[0, j], X[1, j]
+            sum_rwsin += r_j * self._coupling_strength * np.sin(theta_j - theta - self.PHI[i, j])
+        theta_dot += sum_rwsin
 
       # set X_dot[:,i]
       X_dot[:,i] = [r_dot, theta_dot]
 
     # integrate 
-    self.X = np.zeros((2,4)) # [TODO]
+    self.X = X + X_dot * self._dt
     # mod phase variables to keep between 0 and 2pi
     self.X[1,:] = self.X[1,:] % (2*np.pi)
 
@@ -172,29 +223,32 @@ if __name__ == "__main__":
     # get desired foot positions from CPG 
     xs,zs = cpg.update()
     # [TODO] get current motor angles and velocities for joint PD, see GetMotorAngles(), GetMotorVelocities() in quadruped.py
-    # q = 
-    # dq = 
+    q = np.array(env.robot.GetMotorAngles()).reshape(4, -1) # shape [1, 12]
+    dq = np.array(env.robot.GetMotorVelocities()).reshape(4, -1)
 
     # loop through desired foot positions and calculate torques
     for i in range(4):
       # initialize torques for legi
       tau = np.zeros(3)
       # get desired foot i pos (xi, yi, zi) in leg frame
-      leg_xyz = np.array([xs[i],sideSign[i] * foot_y,zs[i]])
+      leg_xyz = np.array([xs[i], sideSign[i] * foot_y,zs[i]]) # [1, 3]
       # call inverse kinematics to get corresponding joint angles (see ComputeInverseKinematics() in quadruped.py)
-      leg_q = np.zeros(3) # [TODO] 
+      leg_q = np.array(env.robot.ComputeInverseKinematics(i, leg_xyz)) #[1, 3]
       # Add joint PD contribution to tau for leg i (Equation 4)
-      tau += np.zeros(3) # [TODO] 
+      tau += kp * (leg_q - q[i, :]) + kd * (-1*dq[i, :]) # [TODO] # [1, 3]
+      # logger.debug(tau.shape)
 
       # add Cartesian PD contribution
       if ADD_CARTESIAN_PD:
         # Get current Jacobian and foot position in leg frame (see ComputeJacobianAndPosition() in quadruped.py)
-        # [TODO] 
+        J, pos = env.robot.ComputeJacobianAndPosition(i) # [1, 3]
         # Get current foot velocity in leg frame (Equation 2)
-        # [TODO] 
+        v = np.dot(J, q[i, :].transpose()).transpose() # {[3, 3] * [3, 1]}^T
+        # logger.info(v.shape) 
         # Calculate torque contribution from Cartesian PD (Equation 5) [Make sure you are using matrix multiplications]
-        tau += np.zeros(3) # [TODO]
-
+        F = np.matmul(kpCartesian, (leg_xyz - pos).transpose()) + np.matmul(kdCartesian, (-v).transpose()) # [1, 3]
+        tau += np.matmul(J.T, F)
+        # logger.debug(tau.shape)
       # Set tau for legi in action vector
       action[3*i:3*i+3] = tau
 

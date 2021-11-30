@@ -20,6 +20,9 @@ random.seed(10)
 import quadruped
 import configs_a1 as robot_config
 
+# loggers
+from loguru import logger
+
 
 ACTION_EPS = 0.01
 OBSERVATION_EPS = 0.01
@@ -36,7 +39,7 @@ VIDEO_LOG_DIRECTORY = 'videos/' + datetime.datetime.now().strftime("vid-%Y-%m-%d
 #         [TODO: what should you train for?]
 #         Ideally we want to command A1 to run in any direction while expending minimal energy
 #         It is suggested to first train to run at 3 sample velocities (0.5 m/s, 1 m/s, 1.5 m/s)
-#         How will you construct your reward function? 
+#         How will you construct your reward function?  
 
 # Motor control modes:
 #   - "TORQUE": 
@@ -179,10 +182,11 @@ class QuadrupedGymEnv(gym.Env):
       self._observation = np.concatenate((self.robot.GetMotorAngles(), 
                                           self.robot.GetMotorVelocities(),
                                           self.robot.GetBaseOrientation() ))
+      logger.debug(self._observation.shape)
     elif self._observation_space_mode == "LR_COURSE_OBS":
       # [TODO] Get observation from robot. What are reasonable measurements we could get on hardware?
       # 50 is arbitrary
-      self._observation = np.zeros(50)
+      self._observation = np.zeros(50) #np.concatenate((self))
 
     else:
       raise ValueError("observation space not defined or not intended")
@@ -277,7 +281,7 @@ class QuadrupedGymEnv(gym.Env):
     # clip RL actions to be between -1 and 1 (standard RL technique)
     u = np.clip(actions,-1,1)
     # scale to corresponding desired foot positions (i.e. ranges in x,y,z we allow the agent to choose foot positions)
-    # [TODO: edit (do you think these should these be increased? How limiting is this?)]
+    # [TODO: edit (do you think these should be increased? How limiting is this?)]
     scale_array = np.array([0.1, 0.05, 0.08]*4)
     # add to nominal foot position in leg frame (what are the final ranges?)
     des_foot_pos = self._robot_config.NOMINAL_FOOT_POS_LEG_FRAME + scale_array*u
@@ -622,7 +626,7 @@ class QuadrupedGymEnv(gym.Env):
 
 def test_env():
   env = QuadrupedGymEnv(render=True, 
-                        on_rack=True,
+                        on_rack=False,
                         motor_control_mode='PD',
                         action_repeat=100,
                         )
@@ -636,6 +640,7 @@ def test_env():
   while True:
     action = 2*np.random.rand(action_dim)-1
     obs, reward, done, info = env.step(action)
+    print(reward)
 
 
 if __name__ == "__main__":

@@ -5,11 +5,17 @@ import time
 import matplotlib
 import matplotlib.pyplot as plt
 from sys import platform
+
+from torch._C import dtype
 if platform =="darwin": # mac
   import PyQt5
   matplotlib.use("Qt5Agg")
 else: # linux
   matplotlib.use('TkAgg')
+
+# logger
+import logging
+logging.getLogger().setLevel(logging.INFO)
 
 # stable baselines
 from stable_baselines3.common.monitor import load_results 
@@ -26,7 +32,7 @@ from utils.file_utils import get_latest_model, load_all_results
 LEARNING_ALG = "PPO"
 interm_dir = "./logs/intermediate_models/"
 # path to saved models, i.e. interm_dir + '111121133812'
-log_dir = interm_dir + ''
+log_dir = interm_dir + '112321143247'
 
 # initialize env configs (render at test time)
 # check ideal conditions, as well as robustness to UNSEEN noise during training
@@ -39,7 +45,7 @@ env_config['add_noise'] = False
 stats_path = os.path.join(log_dir, "vec_normalize.pkl")
 model_name = get_latest_model(log_dir)
 monitor_results = load_results(log_dir)
-print(monitor_results)
+logging.info(monitor_results)
 plot_results([log_dir] , 10e10, 'timesteps', LEARNING_ALG + ' ')
 plt.show() 
 
@@ -62,9 +68,16 @@ episode_reward = 0
 
 # [TODO] initialize arrays to save data from simulation 
 #
+obs_arr = []
+rewards_arr = []
+dones_arr = []
+info_arr = []
+robot_speed = []
+
 
 for i in range(2000):
     action, _states = model.predict(obs,deterministic=False) # sample at test time? ([TODO]: test)
+    # logging.info(type(_states))
     obs, rewards, dones, info = env.step(action)
     episode_reward += rewards
     if dones:
@@ -72,5 +85,5 @@ for i in range(2000):
         episode_reward = 0
 
     # [TODO] save data from current robot states for plots 
-
+    # robot_speed.append(robot.GetMotorVelocities())
 # [TODO] make plots:
