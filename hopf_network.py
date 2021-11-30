@@ -65,7 +65,7 @@ class HopfNetwork():
 
   def _set_gait(self,gait):
     """ For coupling oscillators in phase space. 
-    [TODO] update all coupling matrices
+    [tODO] update all coupling matrices
     """
     
     # FR xxxx______ # add x to walking trot
@@ -181,7 +181,7 @@ if __name__ == "__main__":
   sideSign = np.array([-1, 1, -1, 1]) # get correct hip sign (body right is negative)
 
   env = QuadrupedGymEnv(render=True,              # visualize
-                      on_rack=False,              # useful for debugging! 
+                      on_rack=True,              # useful for debugging! 
                       isRLGymInterface=False,     # not using RL
                       time_step=TIME_STEP,
                       action_repeat=1,
@@ -193,11 +193,11 @@ if __name__ == "__main__":
   # initialize Hopf Network, supply gait
   cpg = HopfNetwork(time_step=TIME_STEP)
 
-  TEST_STEPS = int(10 / (TIME_STEP))
+  TEST_STEPS = int(1 / (TIME_STEP))
   t = np.arange(TEST_STEPS)*TIME_STEP
 
   # [TODO] initialize data structures to save CPG and robot states
-  cpg_history = np.zeros((TEST_STEPS, 2))
+  cpg_history = np.zeros((TEST_STEPS, 2, 4))
   action_history = np.zeros((TEST_STEPS, 12))
 
   ############## Sample Gains
@@ -214,10 +214,10 @@ if __name__ == "__main__":
     action = np.zeros(12) 
     # get desired foot positions from CPG 
     xs,zs = cpg.update()
-    print(xs, zs)
     # [tODO] get current motor angles and velocities for joint PD, see GetMotorAngles(), GetMotorVelocities() in quadruped.py
     q = env.robot.GetMotorAngles()
     dq = env.robot.GetMotorVelocities()
+    dq = np.array([dq]).reshape(4, -1)
 
     # loop through desired foot positions and calculate torques
     for i in range(4):
@@ -226,19 +226,18 @@ if __name__ == "__main__":
       # get desired foot i pos (xi, yi, zi) in leg frame
       leg_xyz = np.array([xs[i],sideSign[i] * foot_y,zs[i]])
       # call inverse kinematics to get corresponding joint angles (see ComputeInverseKinematics() in quadruped.py)
-      leg_q = env.robot.ComputeInverseKinematics(i, leg_xyz) # [TODO] # Question: Coordination 
+      leg_q = env.robot.ComputeInverseKinematics(i, leg_xyz) # [TODO] # Coordination: Shoulder
       # Add joint PD contribution to tau for leg i (Equation 4)
-      tau += np.dot(kp, leg_q - q[i*3:(i*3+3)]) + np.dot(kd, -dq[i*3:(i*3+3)]) # [TODO]  
+      tau += kp * (leg_q - q[i]) + kd * -dq[i] # [TODO]  
 
       # add Cartesian PD contribution
       if ADD_CARTESIAN_PD:
         # Get current Jacobian and foot position in leg frame (see ComputeJacobianAndPosition() in quadruped.py)
-        J = env.robot.ComputeJacobianAndPosition(i)
+        J, pos = env.robot.ComputeJacobianAndPosition(i)
         # Get current foot velocity in leg frame (Equation 2)
-        vel = J*dq[i*3:(i*3+3)]
+        vel = np.matmul(J, np.array([dq[i]]).T)
         # Calculate torque contribution from Cartesian PD (Equation 5) [Make sure you are using matrix multiplications]
-        tau += J.inv*(kpCartesian*(leg_xyz - np.array((xs[i], 0, zs[i]))),
-                      kdCartesian*(-vel)) # [TODO]
+        tau += np.matmul(J.T, np.matmul(kpCartesian,np.array([leg_xyz - pos]).T) + np.matmul(kdCartesian, -vel))[:,0] # [TODO]
 
       # Set tau for legi in action vector
       action[3*i:3*i+3] = tau
@@ -257,7 +256,11 @@ if __name__ == "__main__":
   #####################################################
   # example
   fig = plt.figure()
-  plt.plot(t,cpg_history[:,0], label='cpg xs')
-  plt.plot(t,cpg_history[:,1], label='cpg zs')
+  plt.plot(t,cpg_history[:,0, 1], label='cpg xs FL')
+  plt.plot(t,cpg_history[:,1, 1], label='cpg zs FL')
   plt.legend()
+  plt.show()
+
+  plt.plot(action_history[:, 0], label = 'action FR q0')
+  plt.plot(action_history[:, 3], label = 'action FL q0')
   plt.show()
