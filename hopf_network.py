@@ -2,7 +2,7 @@
 Author: Chengkun Li
 LastEditors: Chengkun Li
 Date: 2021-11-30 01:47:27
-LastEditTime: 2021-11-30 15:00:39
+LastEditTime: 2021-12-01 01:30:03
 Description: Legged Robot Project 2 CPG & HOPF Network part
 FilePath: /lr-proj2-quad-cpg-rl/hopf_network.py
 '''
@@ -14,7 +14,8 @@ https://ieeexplore.ieee.org/stamp/stamp.jsp?arnumber=4543306
 
 """
 import time
-# from loguru import logger
+import argparse
+from loguru import logger
 import numpy as np
 import matplotlib
 from sys import platform
@@ -27,6 +28,16 @@ else: # linux
 from matplotlib import pyplot as plt
 from env.quadruped_gym_env import QuadrupedGymEnv
 
+parser = argparse.ArgumentParser()
+parser.add_argument('--omega_swing', type=float, default=10*2*np.pi)
+parser.add_argument('--omega_stance', type=float, default=10*2*np.pi)
+parser.add_argument('--gait', type=str, default="TROT")
+parser.add_argument('--record', dest='record', action='store_true')
+parser.add_argument('--plot', dest='plot', action='store_true')
+parser.add_argument('--noise', dest='noise', action='store_true')
+# parser.add_argument()
+args = parser.parse_args()
+logger.info(args)
 
 class HopfNetwork():
   """ CPG network based on hopf polar equations mapped to foot positions in Cartesian space.  
@@ -36,9 +47,9 @@ class HopfNetwork():
   """
   def __init__(self,
                 mu=1**2,                # converge to sqrt(mu)
-                omega_swing=10*2*np.pi,  # MUST EDIT
-                omega_stance=10*2*np.pi, # MUST EDIT
-                gait="PACE",            # change depending on desired gait
+                omega_swing=args.omega_swing,  # MUST EDIT
+                omega_stance=args.omega_stance, # MUST EDIT
+                gait=args.gait,            # change depending on desired gait
                 coupling_strength=1,    # coefficient to multiply coupling matrix
                 couple=True,            # should couple
                 time_step=0.001,        # time step 
@@ -141,7 +152,7 @@ class HopfNetwork():
     x = -self._des_step_len * r * np.cos(theta)
     z = np.zeros(4)
     for i in range(4):
-      z[i] = -self._robot_height + self._ground_clearance * np.sin(theta[i]) if np.sin(theta[i]) > 0 \
+      z[i] = -self._robot_height + self._ground_clearance * np.sin(theta[i]) if theta[i] < np.pi \
         else -self._robot_height + self._ground_penetration * np.sin(theta[i]) 
     return x, z
       
@@ -167,16 +178,15 @@ class HopfNetwork():
       if self._couple:
         sum_rwsin = 0
         for j in range(4):
-          if j != i:
-            r_j, theta_j = X[0, j], X[1, j]
-            sum_rwsin += r_j * self._coupling_strength * np.sin(theta_j - theta - self.PHI[i, j])
+          r_j, theta_j = X[0, j], X[1, j]
+          sum_rwsin += r_j * self._coupling_strength * np.sin(theta_j - theta - self.PHI[i, j])
         theta_dot += sum_rwsin
 
       # set X_dot[:,i]
       X_dot[:,i] = [r_dot, theta_dot]
 
     # integrate 
-    self.X = X + X_dot * self._dt
+    self.X += X_dot * self._dt
     # mod phase variables to keep between 0 and 2pi
     self.X[1,:] = self.X[1,:] % (2*np.pi)
 
@@ -195,8 +205,8 @@ if __name__ == "__main__":
                       time_step=TIME_STEP,
                       action_repeat=1,
                       motor_control_mode="TORQUE",
-                      add_noise=False,    # start in ideal conditions
-                      # record_video=True
+                      add_noise=args.noise,    # start in ideal conditions
+                      record_video=args.record,
                       )
 
   # initialize Hopf Network, supply gait
@@ -206,7 +216,8 @@ if __name__ == "__main__":
   t = np.arange(TEST_STEPS)*TIME_STEP
 
   # [TODO] initialize data structures to save CPG and robot states
-
+  joint_pos = []
+  foot_pos = []
 
   ############## Sample Gains
   # joint PD gains
@@ -222,6 +233,7 @@ if __name__ == "__main__":
     action = np.zeros(12) 
     # get desired foot positions from CPG 
     xs,zs = cpg.update()
+    foot_pos.append([xs, zs])
     # [TODO] get current motor angles and velocities for joint PD, see GetMotorAngles(), GetMotorVelocities() in quadruped.py
     q = np.array(env.robot.GetMotorAngles()).reshape(4, -1) # shape [1, 12]
     dq = np.array(env.robot.GetMotorVelocities()).reshape(4, -1)
@@ -231,7 +243,7 @@ if __name__ == "__main__":
       # initialize torques for legi
       tau = np.zeros(3)
       # get desired foot i pos (xi, yi, zi) in leg frame
-      leg_xyz = np.array([xs[i], sideSign[i] * foot_y,zs[i]]) # [1, 3]
+      leg_xyz = np.array([xs[i], sideSign[i] * foot_y, zs[i]]) # [1, 3]
       # call inverse kinematics to get corresponding joint angles (see ComputeInverseKinematics() in quadruped.py)
       leg_q = np.array(env.robot.ComputeInverseKinematics(i, leg_xyz)) #[1, 3]
       # Add joint PD contribution to tau for leg i (Equation 4)
@@ -242,8 +254,9 @@ if __name__ == "__main__":
       if ADD_CARTESIAN_PD:
         # Get current Jacobian and foot position in leg frame (see ComputeJacobianAndPosition() in quadruped.py)
         J, pos = env.robot.ComputeJacobianAndPosition(i) # [1, 3]
+        joint_pos.append(pos)
         # Get current foot velocity in leg frame (Equation 2)
-        v = np.dot(J, q[i, :].transpose()).transpose() # {[3, 3] * [3, 1]}^T
+        v = np.matmul(J, dq[i, :].transpose()) # {[3, 3] * [3, 1]}
         # logger.info(v.shape) 
         # Calculate torque contribution from Cartesian PD (Equation 5) [Make sure you are using matrix multiplications]
         F = np.matmul(kpCartesian, (leg_xyz - pos).transpose()) + np.matmul(kdCartesian, (-v).transpose()) # [1, 3]
@@ -256,14 +269,23 @@ if __name__ == "__main__":
     env.step(action) 
 
     # [TODO] save any CPG or robot states
-
+  foot_pos = np.array(foot_pos) # [-1, 2, 4]
+  joint_pos = np.array(joint_pos).reshape(-1, 4, 3) # [-1, 4, 3]
+  logger.info(foot_pos.shape)
+  logger.info(joint_pos.shape)
+  logger.info(t.shape)
 
 
   ##################################################### 
   # PLOTS
   #####################################################
   # example
-  # fig = plt.figure()
-  # plt.plot(t,joint_pos[1,:], label='FR thigh')
-  # plt.legend()
-  # plt.show()
+  if args.plot:
+    fig = plt.figure()
+    plt.subplot(211)
+    plt.plot(t, foot_pos[:, 1, 0], label='FR foot z')
+    plt.legend()
+    plt.subplot(212)
+    plt.plot(t,joint_pos[:, 0, 1], label='FR thigh')
+    plt.legend()
+    plt.show()

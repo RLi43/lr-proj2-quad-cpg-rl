@@ -1,4 +1,12 @@
-"""This file implements the gym environment for a quadruped. """
+'''
+Author: Legged Robots
+LastEditors: Chengkun Li
+Date: 2021-11-30 22:27:51
+LastEditTime: 2021-12-01 00:20:37
+Description: This file implements the gym environment for a quadruped.
+FilePath: /lr-proj2-quad-cpg-rl/env/quadruped_gym_env.py
+'''
+
 import os, inspect
 # so we can import files
 currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
@@ -182,7 +190,7 @@ class QuadrupedGymEnv(gym.Env):
       self._observation = np.concatenate((self.robot.GetMotorAngles(), 
                                           self.robot.GetMotorVelocities(),
                                           self.robot.GetBaseOrientation() ))
-      logger.debug(self._observation.shape)
+      # logger.debug(self._observation.shape)
     elif self._observation_space_mode == "LR_COURSE_OBS":
       # [TODO] Get observation from robot. What are reasonable measurements we could get on hardware?
       # 50 is arbitrary
@@ -241,8 +249,16 @@ class QuadrupedGymEnv(gym.Env):
 
   def _reward_lr_course(self):
     """ Implement your reward function here. How will you improve upon the above? """
-    # [TODO] add your reward function. 
-    return 0
+    current_base_position = self.robot.GetBasePosition()
+    forward_reward = current_base_position[0] - self._last_base_position[0]
+    self._last_base_position = current_base_position
+    # clip reward to MAX_FWD_VELOCITY (avoid exploiting simulator dynamics)
+    if MAX_FWD_VELOCITY < np.inf:
+      # calculate what max distance can be over last time interval based on max allowed fwd velocity
+      max_dist = MAX_FWD_VELOCITY * (self._time_step * self._action_repeat)
+      forward_reward = min(forward_reward, max_dist)
+
+    return self._distance_weight * forward_reward
 
   def _reward(self):
     """ Get reward depending on task"""
