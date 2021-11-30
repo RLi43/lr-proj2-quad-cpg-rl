@@ -27,8 +27,8 @@ class HopfNetwork():
   """
   def __init__(self,
                 mu=1**2,                # converge to sqrt(mu)
-                omega_swing=1*2*np.pi,  # TODO Swing Frequency
-                omega_stance=1*2*np.pi, # TODO Stance Frequency
+                omega_swing=10*2*np.pi,  # TODO Swing Frequency
+                omega_stance=10*2*np.pi, # TODO Stance Frequency
                 gait="TROT",            # change depending on desired gait
                 coupling_strength=1,    # coefficient to multiply coupling matrix
                 couple=True,            # should couple
@@ -181,7 +181,7 @@ if __name__ == "__main__":
   sideSign = np.array([-1, 1, -1, 1]) # get correct hip sign (body right is negative)
 
   env = QuadrupedGymEnv(render=True,              # visualize
-                      on_rack=True,              # useful for debugging! 
+                      on_rack=False,              # useful for debugging! 
                       isRLGymInterface=False,     # not using RL
                       time_step=TIME_STEP,
                       action_repeat=1,
@@ -193,7 +193,7 @@ if __name__ == "__main__":
   # initialize Hopf Network, supply gait
   cpg = HopfNetwork(time_step=TIME_STEP)
 
-  TEST_STEPS = int(1 / (TIME_STEP))
+  TEST_STEPS = int(10 / (TIME_STEP))
   t = np.arange(TEST_STEPS)*TIME_STEP
 
   # [TODO] initialize data structures to save CPG and robot states
@@ -217,6 +217,7 @@ if __name__ == "__main__":
     # [tODO] get current motor angles and velocities for joint PD, see GetMotorAngles(), GetMotorVelocities() in quadruped.py
     q = env.robot.GetMotorAngles()
     dq = env.robot.GetMotorVelocities()
+    q = np.array([q]).reshape(4, -1)
     dq = np.array([dq]).reshape(4, -1)
 
     # loop through desired foot positions and calculate torques
@@ -255,12 +256,12 @@ if __name__ == "__main__":
   # PLOTS
   #####################################################
   # example
-  fig = plt.figure()
-  plt.plot(t,cpg_history[:,0, 1], label='cpg xs FL')
-  plt.plot(t,cpg_history[:,1, 1], label='cpg zs FL')
-  plt.legend()
-  plt.show()
+  # fig = plt.figure()
+  # plt.plot(t,cpg_history[:,0, 1], label='cpg xs FL')
+  # plt.plot(t,cpg_history[:,1, 1], label='cpg zs FL')
+  # plt.legend()
+  # plt.show()
 
-  plt.plot(action_history[:, 0], label = 'action FR q0')
-  plt.plot(action_history[:, 3], label = 'action FL q0')
-  plt.show()
+  # plt.plot(action_history[:, 0], label = 'action FR q0')
+  # plt.plot(action_history[:, 3], label = 'action FL q0')
+  # plt.show()
