@@ -126,29 +126,30 @@ class HopfNetwork():
       raise ValueError( gait + 'not implemented.')
 
 
-  def update(self):
+  def update(self, contactInfo):
     """ Update oscillator states. """
 
     # update parameters, integrate
-    self._integrate_hopf_equations()
+    self._integrate_hopf_equations(contactInfo)
     
     # map CPG variables to Cartesian foot xz positions (Equations 8, 9) 
     r, theta = self.X[0, :], self.X[1, :]
     x = -self._des_step_len * r * np.cos(theta) #[tODO]
     z = np.zeros(4)
     for i in range(4):
-      g = self._ground_clearance if theta < np.pi else self._ground_penetration
+      g = self._ground_clearance if theta[i] < np.pi else self._ground_penetration
       z[i] = -self._robot_height + np.sin(self.X[1, i]) * g # [tODO]
 
     return x, z
       
         
-  def _integrate_hopf_equations(self):
+  def _integrate_hopf_equations(self, contactBool):
     """ Hopf polar equations and integration. Use equations 6 and 7. """
     # bookkeeping - save copies of current CPG states 
     X = self.X.copy()
     X_dot = np.zeros((2,4))
     alpha = 50 
+    F = 10
 
     # loop through each leg's oscillator
     for i in range(4):
@@ -157,7 +158,17 @@ class HopfNetwork():
       # compute r_dot (Equation 6)
       r_dot = alpha * (self._mu - r**2) * r # [tODO]
       # determine whether oscillator i is in swing or stance phase to set natural frequency omega_swing or omega_stance (see Section 3)
-      theta_dot = self._omega_swing if theta < np.pi else self._omega_stance # [tODO]
+      # swinging
+      if theta < np.pi:
+        theta_dot = self._omega_swing
+        if contactBool[i]:
+          theta_dot += F
+      else:
+        theta_dot = self._omega_stance
+        if not contactBool[i]:
+          theta_dot += F
+
+      # theta_dot = self._omega_swing if theta < np.pi else self._omega_stance # [tODO]
 
       # loop through other oscillators to add coupling (Equation 7)
       if self._couple:
@@ -214,7 +225,8 @@ if __name__ == "__main__":
     # initialize torque array to send to motors
     action = np.zeros(12) 
     # get desired foot positions from CPG 
-    xs,zs = cpg.update()
+    numValidContacts, numInvalidContacts, feetNormalForces, feetInContactBool = env.robot.GetContactInfo()
+    xs,zs = cpg.update(feetInContactBool)
     # [tODO] get current motor angles and velocities for joint PD, see GetMotorAngles(), GetMotorVelocities() in quadruped.py
     q = env.robot.GetMotorAngles()
     dq = env.robot.GetMotorVelocities()
