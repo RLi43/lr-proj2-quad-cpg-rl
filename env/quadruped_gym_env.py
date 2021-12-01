@@ -2,7 +2,7 @@
 Author: Legged Robots
 LastEditors: Chengkun Li
 Date: 2021-11-30 22:27:51
-LastEditTime: 2021-12-01 00:20:37
+LastEditTime: 2021-12-01 03:31:27
 Description: This file implements the gym environment for a quadruped.
 FilePath: /lr-proj2-quad-cpg-rl/env/quadruped_gym_env.py
 '''
@@ -166,8 +166,8 @@ class QuadrupedGymEnv(gym.Env):
     elif self._observation_space_mode == "LR_COURSE_OBS":
       # [TODO] Set observation upper and lower ranges. What are reasonable limits? 
       # Note 50 is arbitrary below, you may have more or less
-      observation_high = (np.zeros(50) + OBSERVATION_EPS)
-      observation_low = (np.zeros(50) -  OBSERVATION_EPS)
+      observation_high = (np.zeros(43) + OBSERVATION_EPS)
+      observation_low = (np.zeros(43) -  OBSERVATION_EPS)
     else:
       raise ValueError("observation space not defined or not intended")
 
@@ -194,7 +194,15 @@ class QuadrupedGymEnv(gym.Env):
     elif self._observation_space_mode == "LR_COURSE_OBS":
       # [TODO] Get observation from robot. What are reasonable measurements we could get on hardware?
       # 50 is arbitrary
-      self._observation = np.zeros(50) #np.concatenate((self))
+      self._observation = np.concatenate((
+        self.robot.GetMotorAngles(),
+        self.robot.GetMotorVelocities(),
+        self.robot.GetBaseOrientationMatrix().reshape(-1,),
+        self.robot.GetBaseLinearVelocity(),
+        self.robot.GetBaseAngularVelocity(),
+        self.robot.GetContactInfo()[3],
+      ))
+      logger.debug(len(self._observation))
 
     else:
       raise ValueError("observation space not defined or not intended")
@@ -250,6 +258,9 @@ class QuadrupedGymEnv(gym.Env):
   def _reward_lr_course(self):
     """ Implement your reward function here. How will you improve upon the above? """
     current_base_position = self.robot.GetBasePosition()
+    current_motor_torque = self.robot.GetMotorTorques()
+    current_motor_speed = self.robot.GetMotorVelocities()
+    energy_reward = np.abs(np.dot(current_motor_torque, current_motor_speed)) * (self._time_step * self._action_repeat)
     forward_reward = current_base_position[0] - self._last_base_position[0]
     self._last_base_position = current_base_position
     # clip reward to MAX_FWD_VELOCITY (avoid exploiting simulator dynamics)
@@ -258,7 +269,7 @@ class QuadrupedGymEnv(gym.Env):
       max_dist = MAX_FWD_VELOCITY * (self._time_step * self._action_repeat)
       forward_reward = min(forward_reward, max_dist)
 
-    return self._distance_weight * forward_reward
+    return self._distance_weight * forward_reward + self._energy_weight * energy_reward + 0.01
 
   def _reward(self):
     """ Get reward depending on task"""
@@ -311,7 +322,7 @@ class QuadrupedGymEnv(gym.Env):
     action = np.zeros(12)
     for i in range(4):
       # get Jacobian and foot position in leg frame for leg i (see ComputeJacobianAndPosition() in quadruped.py)
-      # [TODO]
+      J, pos = self.robot.ComputeJacobianAndPosition(i)
       # desired foot position i (from RL above)
       Pd = np.zeros(3) # [TODO]
       # desired foot velocity i

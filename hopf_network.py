@@ -2,7 +2,7 @@
 Author: Chengkun Li
 LastEditors: Chengkun Li
 Date: 2021-11-30 01:47:27
-LastEditTime: 2021-12-01 01:30:03
+LastEditTime: 2021-12-01 01:42:59
 Description: Legged Robot Project 2 CPG & HOPF Network part
 FilePath: /lr-proj2-quad-cpg-rl/hopf_network.py
 '''
@@ -29,8 +29,9 @@ from matplotlib import pyplot as plt
 from env.quadruped_gym_env import QuadrupedGymEnv
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--omega_swing', type=float, default=10*2*np.pi)
-parser.add_argument('--omega_stance', type=float, default=10*2*np.pi)
+parser.add_argument('--omega_swing', type=float, default=18) # usually 2-4 times of stance
+parser.add_argument('--omega_stance', type=float, default=9)
+parser.add_argument('--step_length', type=float, default=0.04)
 parser.add_argument('--gait', type=str, default="TROT")
 parser.add_argument('--record', dest='record', action='store_true')
 parser.add_argument('--plot', dest='plot', action='store_true')
@@ -47,8 +48,8 @@ class HopfNetwork():
   """
   def __init__(self,
                 mu=1**2,                # converge to sqrt(mu)
-                omega_swing=args.omega_swing,  # MUST EDIT
-                omega_stance=args.omega_stance, # MUST EDIT
+                omega_swing=args.omega_swing*2*np.pi,  # MUST EDIT
+                omega_stance=args.omega_stance*2*np.pi, # MUST EDIT
                 gait=args.gait,            # change depending on desired gait
                 coupling_strength=1,    # coefficient to multiply coupling matrix
                 couple=True,            # should couple
@@ -56,7 +57,7 @@ class HopfNetwork():
                 ground_clearance=0.05,  # foot swing height 
                 ground_penetration=0.01,# foot stance penetration into ground 
                 robot_height=0.25,      # in nominal case (standing) 
-                des_step_len=0.04,      # desired step length 
+                des_step_len=args.step_length,      # desired step length 
                 ):
     
     ###############
