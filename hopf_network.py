@@ -95,8 +95,9 @@ class HopfNetwork():
     self._integrate_hopf_equations()
     
     # map CPG variables to Cartesian foot xz positions (Equations 8, 9) 
-    x = np.zeros(4) # [TODO]
-    z = np.zeros(4) # [TODO]
+    x = -self._des_step_len*self.X[0, :]*np.cos(self.X[1. :])
+    indicator = np.int64(np.sin(self.X[1, :]) > 0)
+    z = -self._robot_height + (self._ground_clearance*indicator + self._ground_penetration*(1 - indicator))*np.sin(self.X[1, :])
 
     return x, z
       
@@ -111,21 +112,22 @@ class HopfNetwork():
     # loop through each leg's oscillator
     for i in range(4):
       # get r_i, theta_i from X
-      r, theta = 0, 0 # [TODO]
+      r, theta = X[:, i]
       # compute r_dot (Equation 6)
-      r_dot = 0 # [TODO]
+      r_dot = alpha*(self._mu - r**2)*r
       # determine whether oscillator i is in swing or stance phase to set natural frequency omega_swing or omega_stance (see Section 3)
-      theta_dot = 0 # [TODO]
+      indicator = int(np.sin(theta) > 0)
+      theta_dot = self._omega_swing*indicator + self._omega_stance*(1 - indicator)
 
       # loop through other oscillators to add coupling (Equation 7)
       if self._couple:
-        theta_dot += 0 # [TODO]
+        theta_dot += np.dot(self._coupling_strength*X[0, :], np.sin(X[1, :] - theta - self.PHI[i, :]))
 
       # set X_dot[:,i]
       X_dot[:,i] = [r_dot, theta_dot]
 
     # integrate 
-    self.X = np.zeros((2,4)) # [TODO]
+    self.X = X + X_dot*self._dt
     # mod phase variables to keep between 0 and 2pi
     self.X[1,:] = self.X[1,:] % (2*np.pi)
 
@@ -155,6 +157,8 @@ if __name__ == "__main__":
   t = np.arange(TEST_STEPS)*TIME_STEP
 
   # [TODO] initialize data structures to save CPG and robot states
+  cpg_tmp = cpg
+  robot_tmp = env.robot
 
 
   ############## Sample Gains
@@ -170,10 +174,10 @@ if __name__ == "__main__":
     # initialize torque array to send to motors
     action = np.zeros(12) 
     # get desired foot positions from CPG 
-    xs,zs = cpg.update()
-    # [TODO] get current motor angles and velocities for joint PD, see GetMotorAngles(), GetMotorVelocities() in quadruped.py
-    # q = 
-    # dq = 
+    xs,zs = cpg_tmp.update()
+    # get current motor angles and velocities for joint PD, see GetMotorAngles(), GetMotorVelocities() in quadruped.py
+    q = robot_tmp.GetMotorAngles()
+    dq = robot_tmp.GetMotorVelocities()
 
     # loop through desired foot positions and calculate torques
     for i in range(4):
@@ -182,18 +186,20 @@ if __name__ == "__main__":
       # get desired foot i pos (xi, yi, zi) in leg frame
       leg_xyz = np.array([xs[i],sideSign[i] * foot_y,zs[i]])
       # call inverse kinematics to get corresponding joint angles (see ComputeInverseKinematics() in quadruped.py)
-      leg_q = np.zeros(3) # [TODO] 
+      leg_q = robot_tmp.ComputeInverseKinematics(i, leg_xyz)
       # Add joint PD contribution to tau for leg i (Equation 4)
-      tau += np.zeros(3) # [TODO] 
+      leg_dq = (leg_q - q)/TIME_STEP
+      tau += kp*(leg_q - q) + kd*(leg_dq - dq)
 
       # add Cartesian PD contribution
       if ADD_CARTESIAN_PD:
         # Get current Jacobian and foot position in leg frame (see ComputeJacobianAndPosition() in quadruped.py)
-        # [TODO] 
+        Jacobian, p = robot_tmp.ComputeJacobianAndPosition(i)
         # Get current foot velocity in leg frame (Equation 2)
-        # [TODO] 
+        v = Jacobian@dq
         # Calculate torque contribution from Cartesian PD (Equation 5) [Make sure you are using matrix multiplications]
-        tau += np.zeros(3) # [TODO]
+        leg_dxyz = (leg_xyz - p)/TIME_STEP
+        tau += np.transpose(Jacobian)@(kpCartesian@(leg_xyz - p) + kdCartesian@(leg_dxyz - v))
 
       # Set tau for legi in action vector
       action[3*i:3*i+3] = tau
@@ -201,8 +207,9 @@ if __name__ == "__main__":
     # send torques to robot and simulate TIME_STEP seconds 
     env.step(action) 
 
-    # [TODO] save any CPG or robot states
-
+    # save any CPG or robot states
+    cpg_tmp = cpg
+    robot_tmp = env.robot
 
 
   ##################################################### 
