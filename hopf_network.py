@@ -67,7 +67,7 @@ class HopfNetwork():
     """ For coupling oscillators in phase space. 
     [TODO] update all coupling matrices
     """
-    self.PHI_trot = np.zeros((4,4))
+    self.PHI_trot = np.array([[0, -np.pi, -np.pi, 0], [np.pi, 0, 0, np.pi], [np.pi, 0, 0, np.pi], [0, -np.pi, -np.pi, 0]])
     self.PHI_walk = np.zeros((4,4))
     self.PHI_bound = np.zeros((4,4))
     self.PHI_pace = np.zeros((4,4))
@@ -95,7 +95,7 @@ class HopfNetwork():
     self._integrate_hopf_equations()
     
     # map CPG variables to Cartesian foot xz positions (Equations 8, 9) 
-    x = -self._des_step_len*self.X[0, :]*np.cos(self.X[1. :])
+    x = -self._des_step_len*self.X[0, :]*np.cos(self.X[1, :])
     indicator = np.int64(np.sin(self.X[1, :]) > 0)
     z = -self._robot_height + (self._ground_clearance*indicator + self._ground_penetration*(1 - indicator))*np.sin(self.X[1, :])
 
@@ -176,8 +176,8 @@ if __name__ == "__main__":
     # get desired foot positions from CPG 
     xs,zs = cpg_tmp.update()
     # get current motor angles and velocities for joint PD, see GetMotorAngles(), GetMotorVelocities() in quadruped.py
-    q = robot_tmp.GetMotorAngles()
-    dq = robot_tmp.GetMotorVelocities()
+    q = robot_tmp.GetMotorAngles().reshape(3, 4)
+    dq = robot_tmp.GetMotorVelocities().reshape(3, 4)
 
     # loop through desired foot positions and calculate torques
     for i in range(4):
@@ -188,18 +188,20 @@ if __name__ == "__main__":
       # call inverse kinematics to get corresponding joint angles (see ComputeInverseKinematics() in quadruped.py)
       leg_q = robot_tmp.ComputeInverseKinematics(i, leg_xyz)
       # Add joint PD contribution to tau for leg i (Equation 4)
-      leg_dq = (leg_q - q)/TIME_STEP
-      tau += kp*(leg_q - q) + kd*(leg_dq - dq)
+      leg_dq = (leg_q - q[:, i])/TIME_STEP
+      # tau += kp*(leg_q - q[:, i]) + kd*(leg_dq - dq[:, i])
+      tau += kp*(leg_q - q[:, i]) + kd*(-dq[:, i])
 
       # add Cartesian PD contribution
       if ADD_CARTESIAN_PD:
         # Get current Jacobian and foot position in leg frame (see ComputeJacobianAndPosition() in quadruped.py)
         Jacobian, p = robot_tmp.ComputeJacobianAndPosition(i)
         # Get current foot velocity in leg frame (Equation 2)
-        v = Jacobian@dq
+        v = Jacobian@dq[:, i]
         # Calculate torque contribution from Cartesian PD (Equation 5) [Make sure you are using matrix multiplications]
         leg_dxyz = (leg_xyz - p)/TIME_STEP
-        tau += np.transpose(Jacobian)@(kpCartesian@(leg_xyz - p) + kdCartesian@(leg_dxyz - v))
+        # tau += np.transpose(Jacobian)@(kpCartesian@(leg_xyz - p) + kdCartesian@(leg_dxyz - v))
+        tau += np.transpose(Jacobian)@(kpCartesian@(leg_xyz - p) + kdCartesian@(-v))
 
       # Set tau for legi in action vector
       action[3*i:3*i+3] = tau
