@@ -6,6 +6,7 @@ https://ieeexplore.ieee.org/stamp/stamp.jsp?arnumber=4543306
 
 """
 import time
+import argparse
 import numpy as np
 import matplotlib
 from sys import platform
@@ -27,8 +28,8 @@ class HopfNetwork():
   """
   def __init__(self,
                 mu=1**2,                # converge to sqrt(mu)
-                omega_swing=1*2*np.pi,  # MUST EDIT
-                omega_stance=1*2*np.pi, # MUST EDIT
+                omega_swing=5*2*np.pi,  # MUST EDIT
+                omega_stance=2*2*np.pi, # MUST EDIT
                 gait="TROT",            # change depending on desired gait
                 coupling_strength=1,    # coefficient to multiply coupling matrix
                 couple=True,            # should couple
@@ -70,7 +71,7 @@ class HopfNetwork():
     self.PHI_trot = np.array([[0, -np.pi, -np.pi, 0], [np.pi, 0, 0, np.pi], [np.pi, 0, 0, np.pi], [0, -np.pi, -np.pi, 0]])
     self.PHI_walk = np.zeros((4,4))
     self.PHI_bound = np.zeros((4,4))
-    self.PHI_pace = np.zeros((4,4))
+    self.PHI_pace = np.array([[0, 1/2*np.pi, np.pi, 3/2*np.pi], [-1/2*np.pi, 0, 1/2*np.pi, np.pi], [-np.pi, -1/2*np.pi, 0, 1/2*np.pi], [-3/2*np.pi, -np.pi, -1/2*np.pi, 0]])
 
     if gait == "TROT":
       print('TROT')
@@ -125,6 +126,9 @@ class HopfNetwork():
 
       # set X_dot[:,i]
       X_dot[:,i] = [r_dot, theta_dot]
+    
+    # save X_dot for plotting
+    self.X_dot = X_dot.copy()
 
     # integrate 
     self.X = X + X_dot*self._dt
@@ -132,8 +136,18 @@ class HopfNetwork():
     self.X[1,:] = self.X[1,:] % (2*np.pi)
 
 
+def parse_arguments():
+    parser = argparse.ArgumentParser(description='CPG Arguments Parser')
+    parser.add_argument('--gait', type=str, default='TROT', help='TROT, PACE, BOUND or WALK')
+    parser.add_argument('-s', '--store', action='store_true', help='Store CPG and robot states')
+    parser.add_argument('-p', '--plot', action='store_true', help='Plot CPG and robot states')
+    parser.add_argument('-v', '--video', action='store_true', help='Record a video')
+
+    return parser.parse_args()
+
 
 if __name__ == "__main__":
+  args = parse_arguments()
 
   ADD_CARTESIAN_PD = True
   TIME_STEP = 0.001
@@ -147,18 +161,24 @@ if __name__ == "__main__":
                       action_repeat=1,
                       motor_control_mode="TORQUE",
                       add_noise=False,    # start in ideal conditions
-                      # record_video=True
+                      record_video=args.video
                       )
 
   # initialize Hopf Network, supply gait
-  cpg = HopfNetwork(time_step=TIME_STEP)
+  cpg = HopfNetwork(time_step=TIME_STEP, gait=args.gait)
 
   TEST_STEPS = int(10 / (TIME_STEP))
   t = np.arange(TEST_STEPS)*TIME_STEP
 
   # [TODO] initialize data structures to save CPG and robot states
-  cpg_tmp = cpg
-  robot_tmp = env.robot
+  # CPG = np.zeros((TEST_STEPS, 4, 2))
+  # Pos_d = np.zeros((TEST_STEPS, 4, 3))
+  # Pos = np.zeros((TEST_STEPS, 4, 3))
+  # Joint_d = np.zeros((TEST_STEPS, 4, 3))
+  # Joint = np.zeros((TEST_STEPS, 4, 3))
+
+  # States by row: r, theta, r_dot, theta_dot, posd(x, y, z), pos, qd, q
+  States = np.zeros((TEST_STEPS, 16, 4))
 
 
   ############## Sample Gains
@@ -174,10 +194,14 @@ if __name__ == "__main__":
     # initialize torque array to send to motors
     action = np.zeros(12) 
     # get desired foot positions from CPG 
-    xs,zs = cpg_tmp.update()
+    xs,zs = cpg.update()
     # get current motor angles and velocities for joint PD, see GetMotorAngles(), GetMotorVelocities() in quadruped.py
-    q = robot_tmp.GetMotorAngles().reshape(3, 4)
-    dq = robot_tmp.GetMotorVelocities().reshape(3, 4)
+    q = np.transpose(env.robot.GetMotorAngles().reshape(4, 3))
+    dq = np.transpose(env.robot.GetMotorVelocities().reshape(4, 3))
+
+    pos_d = np.zeros((3, 4))
+    pos = np.zeros((3, 4))
+    joint_d = np.zeros((3, 4))
 
     # loop through desired foot positions and calculate torques
     for i in range(4):
@@ -186,39 +210,99 @@ if __name__ == "__main__":
       # get desired foot i pos (xi, yi, zi) in leg frame
       leg_xyz = np.array([xs[i],sideSign[i] * foot_y,zs[i]])
       # call inverse kinematics to get corresponding joint angles (see ComputeInverseKinematics() in quadruped.py)
-      leg_q = robot_tmp.ComputeInverseKinematics(i, leg_xyz)
+      leg_q = env.robot.ComputeInverseKinematics(i, leg_xyz)
       # Add joint PD contribution to tau for leg i (Equation 4)
-      leg_dq = (leg_q - q[:, i])/TIME_STEP
-      # tau += kp*(leg_q - q[:, i]) + kd*(leg_dq - dq[:, i])
-      tau += kp*(leg_q - q[:, i]) + kd*(-dq[:, i])
+      leg_dq = (leg_q - q[:, i])/TIME_STEP*0.01
+      tau += kp*(leg_q - q[:, i]) + kd*(leg_dq - dq[:, i])
+      # tau += kp*(leg_q - q[:, i]) + kd*(-dq[:, i])
 
       # add Cartesian PD contribution
       if ADD_CARTESIAN_PD:
         # Get current Jacobian and foot position in leg frame (see ComputeJacobianAndPosition() in quadruped.py)
-        Jacobian, p = robot_tmp.ComputeJacobianAndPosition(i)
+        Jacobian, p = env.robot.ComputeJacobianAndPosition(i)
         # Get current foot velocity in leg frame (Equation 2)
         v = Jacobian@dq[:, i]
         # Calculate torque contribution from Cartesian PD (Equation 5) [Make sure you are using matrix multiplications]
-        leg_dxyz = (leg_xyz - p)/TIME_STEP
-        # tau += np.transpose(Jacobian)@(kpCartesian@(leg_xyz - p) + kdCartesian@(leg_dxyz - v))
-        tau += np.transpose(Jacobian)@(kpCartesian@(leg_xyz - p) + kdCartesian@(-v))
+        leg_dxyz = (leg_xyz - p)/TIME_STEP*0.01
+        tau += np.transpose(Jacobian)@(kpCartesian@(leg_xyz - p) + kdCartesian@(leg_dxyz - v))
+        # tau += np.transpose(Jacobian)@(kpCartesian@(leg_xyz - p) + kdCartesian@(-v))
 
       # Set tau for legi in action vector
       action[3*i:3*i+3] = tau
+
+      if args.store or args.plot:
+        pos_d[:, i] = leg_xyz
+        pos[:, i] = p
+        joint_d[:, i] = leg_q
 
     # send torques to robot and simulate TIME_STEP seconds 
     env.step(action) 
 
     # save any CPG or robot states
-    cpg_tmp = cpg
-    robot_tmp = env.robot
+    if args.store or args.plot:
+      States[j, 0:2, :] = cpg.X
+      States[j, 2:4, :] = cpg.X_dot
+      States[j, 4:7, :] = pos_d
+      States[j, 7:10, :] = pos
+      States[j, 10:13, :] = joint_d
+      States[j, 13:16, :] = q
+  
+  if args.store:
+    ofile = open('robot_states.csv', 'wb')
+    np.savetxt(ofile, States.reshape(TEST_STEPS, -1), delimiter=',')
+    ofile.close()
 
 
   ##################################################### 
   # PLOTS
   #####################################################
-  # example
-  # fig = plt.figure()
-  # plt.plot(t,joint_pos[1,:], label='FR thigh')
-  # plt.legend()
-  # plt.show()
+  if args.plot:
+    leg_name = ['FR', 'FL', 'RR', 'RL']
+    coord_name = ['x', 'y', 'z']
+    joint_name = ['hip', 'thigh', 'calf']
+
+    # CPG
+    fig, axs = plt.subplots(4, 1)
+    fig.subplots_adjust(hspace = .5)
+    axs = axs.ravel()
+
+    for i in range(4):
+      axs[i].plot(t, States[:, 0, i], label=f'{leg_name[i]} r')
+      axs[i].plot(t, States[:, 1, i], label=f'{leg_name[i]} theta')
+      axs[i].plot(t, States[:, 2, i], label=f'{leg_name[i]} r_dot')
+      axs[i].plot(t, States[:, 3, i], label=f'{leg_name[i]} theta_dot')
+      axs[i].set_title(leg_name[i])
+      axs[i].legend()
+
+    plt.show()
+
+    # pos_d vs. pos
+    fig, axs = plt.subplots(3, 1)
+    fig.subplots_adjust(hspace = .5)
+    axs = axs.ravel()
+
+    leg_no = 0
+
+    for i in range(3):
+      axs[i].plot(t, States[:, 4+i, leg_no], label=f'{leg_name[leg_no]} {coord_name[i]} desired')
+      axs[i].plot(t, States[:, 7+i, leg_no], label=f'{leg_name[leg_no]} {coord_name[i]}')
+      axs[i].set_title(coord_name[i])
+      axs[i].legend()
+    
+    plt.show()
+
+    # joint_d vs. joint
+    fig, axs = plt.subplots(3, 1)
+    fig.subplots_adjust(hspace = .5)
+    axs = axs.ravel()
+
+    leg_no = 0
+
+    for i in range(3):
+      axs[i].plot(t, States[:, 10+i, leg_no], label=f'{leg_name[leg_no]} {joint_name[i]} desired')
+      axs[i].plot(t, States[:, 13+i, leg_no], label=f'{leg_name[leg_no]} {joint_name[i]}')
+      axs[i].set_title(joint_name[i])
+      axs[i].legend()
+    
+    plt.show()
+    
