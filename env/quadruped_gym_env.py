@@ -201,7 +201,7 @@ class QuadrupedGymEnv(gym.Env):
       foot_v = np.zeros(12)
 
       for i in range(4):
-        J, foot_p[3*i:3*i+3] = self.robot.ComputeJacobianAndPosition()
+        J, foot_p[3*i:3*i+3] = self.robot.ComputeJacobianAndPosition(i)
         foot_v[3*i:3*i+3] = J@dq[:, i]
       
       self._observation = np.concatenate((self.robot.GetBaseLinearVelocity(), 
@@ -271,7 +271,7 @@ class QuadrupedGymEnv(gym.Env):
     if norm_temp == 0:
       base_linear_vel_normed = base_linear_vel
     else:
-      base_linear_vel_normed = base_linear_vel/norm
+      base_linear_vel_normed = base_linear_vel/norm_temp
 
     base_linear_vel_proj = np.dot(base_linear_vel_normed, self._cmd_base_vel_normed)
     # linear velocity reward
@@ -282,6 +282,13 @@ class QuadrupedGymEnv(gym.Env):
     # base motion reward
     rwd_base_motion = np.exp(-1.5*np.linalg.norm(base_linaer_vel_ortho)**2) + np.exp(-1.5*(droll**2 + dpitch**2))
 
+    ang_rot = np.arctan2(self._cmd_base_vel_normed[2], self._cmd_base_vel_normed[1])
+    axs_rot = np.array([0.0, 0.0, 1.0])
+    quat_d = np.concatenate((axs_rot*np.sin(ang_rot/2), np.array([np.cos(ang_rot/2)])))
+    quat = self.robot.GetBaseOrientation()
+    # orientation reward
+    rwd_orient = np.exp(-np.linalg.norm(quat_d - quat)**2)
+
     torques = self.robot.GetMotorTorques()
     dq = self.robot.GetMotorVelocities()
     # energy reward
@@ -290,9 +297,9 @@ class QuadrupedGymEnv(gym.Env):
     # command speed reward
     rwd_cmd_speed = np.exp(-0.1*(np.linalg.norm(base_linear_vel) - self._cmd_base_speed)**2)
 
-    reward = 0.05*rwd_linear_vel + 0.04*rwd_base_motion + 0.05*rwd_cmd_speed + 0.00002*rwd_energy + 0.01
+    reward = 0.05*rwd_linear_vel + 0.04*rwd_base_motion + 0.05*rwd_cmd_speed + 0.05*rwd_orient + 0.00002*rwd_energy + 0.01
 
-    return 0
+    return reward
 
   def _reward(self):
     """ Get reward depending on task"""
