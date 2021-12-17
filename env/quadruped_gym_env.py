@@ -1,5 +1,7 @@
 """This file implements the gym environment for a quadruped. """
 import os, inspect
+
+from numpy import linalg
 # so we can import files
 currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
 os.sys.path.insert(0, currentdir)
@@ -132,6 +134,7 @@ class QuadrupedGymEnv(gym.Env):
     self.setupObservationSpace()
     if self._is_render:
       self._pybullet_client = bc.BulletClient(connection_mode=pybullet.GUI)
+      self.debugId = None
     else:
       self._pybullet_client = bc.BulletClient()
     self._configure_visualizer()
@@ -325,7 +328,7 @@ class QuadrupedGymEnv(gym.Env):
       self._dt_motor_velocities.append(self.robot.GetMotorVelocities())
 
       if self._is_render:
-        self._render_step_helper()
+        self.debugId = self._render_step_helper(self.debugId)
 
     self._last_action = curr_act
     self._env_step_counter += 1
@@ -460,7 +463,7 @@ class QuadrupedGymEnv(gym.Env):
     self.np_random, seed = seeding.np_random(seed)
     return [seed]
 
-  def _render_step_helper(self):
+  def _render_step_helper(self, old_id = None):
     """ Helper to configure the visualizer camera during step(). """
     # Sleep, otherwise the computation takes less time than real time,
     # which will make the visualization like a fast-forward video.
@@ -482,6 +485,20 @@ class QuadrupedGymEnv(gym.Env):
         curTargetPos[2]
     ]
     self._pybullet_client.resetDebugVisualizerCamera(distance, yaw, pitch, base_pos)
+    linear_vel = self.robot.GetBaseLinearVelocity()
+    if old_id is None:
+      return self._pybullet_client.addUserDebugText(
+        text = F"vel:{np.linalg.norm(linear_vel):.2f},{linear_vel}",
+        textPosition = self.robot.GetBasePosition() + np.array([0,0,0.5]),
+        textSize = 0.5,
+        textColorRGB = [0, 0, 1])
+    else:
+      return self._pybullet_client.addUserDebugText(
+        text = F"vel:{np.linalg.norm(linear_vel):.2f},{linear_vel}",
+        textPosition = self.robot.GetBasePosition() + np.array([-0.3,-0.3,0.3]),
+        textSize = 2.0,
+        textColorRGB = [0, 0, 1],
+        replaceItemUniqueId = old_id)
 
   def _configure_visualizer(self):
     """ Remove all visualizer borders, and zoom in """
