@@ -243,6 +243,7 @@ if __name__ == "__main__":
   velocity_history = np.zeros((TEST_STEPS, 3))
   history_phase_change = [0]
   last_state = cpg.state[history_leg_ind]
+  enery_cost = 0.0
 
   ############## Sample Gains
   # joint PD gains
@@ -260,9 +261,9 @@ if __name__ == "__main__":
     numValidContacts, numInvalidContacts, feetNormalForces, feetInContactBool = env.robot.GetContactInfo()
     xs,zs = cpg.update() #feetInContactBool
     # [tODO] get current motor angles and velocities for joint PD, see GetMotorAngles(), GetMotorVelocities() in quadruped.py
-    q = env.robot.GetMotorAngles()
+    q_last = env.robot.GetMotorAngles()
     dq = env.robot.GetMotorVelocities()
-    q = np.array([q]).reshape(4, -1)
+    q = np.array([q_last]).reshape(4, -1)
     dq = np.array([dq]).reshape(4, -1)
 
     # loop through desired foot positions and calculate torques
@@ -303,12 +304,14 @@ if __name__ == "__main__":
     cpg_history[j,:] = np.concatenate((cpg.X, cpg.X_dot), axis=0)
     action_history[j, :] = action
     J, foot_real_history[j, :] = env.robot.ComputeJacobianAndPosition(history_leg_ind)
-    angles_real_history[j,:] = env.robot.GetMotorAngles()[history_leg_motor_ids]
+    q_update = env.robot.GetMotorAngles()
+    angles_real_history[j,:] = q_update[history_leg_motor_ids]
     velocity_history[j,:] = env.robot.GetBaseLinearVelocity()
     cur_state = cpg.state[history_leg_ind]
     if cur_state != last_state:
       last_state = cur_state
       history_phase_change.append(j)
+    enery_cost += (q_update - q_last) * action
 
 
 
@@ -316,12 +319,19 @@ if __name__ == "__main__":
   ##################################################### 
   # PLOTS
   #####################################################
+  print(enery_cost)
+  enery_cost = sum(enery_cost)
+  print("Energy Cost:", enery_cost)
+  cur_position = env.robot.GetBasePosition()
+  distance_traveled = np.linalg.norm(cur_position)
+  print("Distance Traveled:", distance_traveled)
+  print("Cost of Transport:", enery_cost/distance_traveled)
   # example
   fig = plt.figure()
   leg_names = ["FR", "FL", "RR", "RL"]
   scales = [1, np.pi, 10, 100]
   for i in range(4):
-    plt.subplot(2,2,1+i)
+    plt.subplot(4,1,1+i)
     plt.title(leg_names[i])
     for j in range(4):
       plt.plot(t, cpg_history[:,j,i]/scales[j])
@@ -339,7 +349,6 @@ if __name__ == "__main__":
   plt.plot(t, angles_desire_history)
   plt.legend(["real_thigh","real_calf","real_foot","desire_thigh","desire_calf","desire_foot"])
 
-  print(history_phase_change)
   history_phase_change = np.array(history_phase_change)
   history_duration = history_phase_change[1:] - history_phase_change[:-1]
   try:
@@ -347,13 +356,19 @@ if __name__ == "__main__":
   except:
     start_of_a_cycle = history_phase_change[:-1].reshape(-1, 2)
 
-  start_of_a_cycle = start_of_a_cycle[:,0]
+  start_of_a_cycle = start_of_a_cycle[:,0]*TIME_STEP
   k = int(len(history_duration)/2)
   history_duration = np.array(history_duration[:2*k]).reshape(-1, 2)
   duty_factors = history_duration[:, 1] / np.sum(history_duration, axis = 1)
   fig = plt.figure()
-  plt.plot(start_of_a_cycle*TIME_STEP, duty_factors)
+  plt.subplot(2,1,1)
   plt.title("Duty Factor")
+  plt.plot(start_of_a_cycle, duty_factors)
+  plt.subplot(2,1,2)
+  plt.title("Phase Durations")
+  plt.plot(start_of_a_cycle, history_duration[:, 0])
+  plt.plot(start_of_a_cycle, history_duration[:, 1])
+  plt.legend(["Swing Phase Duration", "Stance Phase Duration"])
 
   plt.show()
 
