@@ -27,9 +27,9 @@ class HopfNetwork():
   """
   def __init__(self,
                 mu=1**2,                # converge to sqrt(mu)
-                omega_swing=10*2*np.pi,  # TODO Swing Frequency
+                omega_swing=40*2*np.pi,  # TODO Swing Frequency
                 omega_stance=10*2*np.pi, # TODO Stance Frequency
-                gait="TROT",            # change depending on desired gait
+                gait="WALK",            # change depending on desired gait
                 coupling_strength=1,    # coefficient to multiply coupling matrix
                 couple=True,            # should couple
                 time_step=0.001,        # time step 
@@ -62,52 +62,51 @@ class HopfNetwork():
     self._robot_height = robot_height 
     self._des_step_len = des_step_len
 
+    # save r and theta
+    self.X_dot = np.zeros((2,4))
+
 
   def _set_gait(self,gait):
     """ For coupling oscillators in phase space. 
     [tODO] update all coupling matrices
     """
+    # FL(2)  FR(1)
+    # RL(4)  RR(3)
     
-    # FR xxxx______ # add x to walking trot
-    # FL _____xxxx_
-    # RR _____xxxx_
-    # RL xxxx______
-    self.PHI_trot = np.array(
-      ((0, np.pi, np.pi, 0),
-       (-np.pi, 0, 0, -np.pi),
-       (-np.pi, 0, 0, -np.pi),
-       (0, np.pi, np.pi, 0))
+    # 0.0    0.5
+    # 0.5    0.0
+    self.PHI_trot = 2*np.pi*np.array(
+      ((0, 0.5, 0.5, 0),
+       (-0.5, 0, 0, -0.5),
+       (-0.5, 0, 0, -0.5),
+       (0, 0.5, 0.5, 0))
     )
-    # FR _xxxxxxx__
-    # FL xxx___xxxx
-    # RR xx___xxxxx
-    # RL xxxxxxx___
-    p = 0.4
-    self.PHI_walk = np.array(
-      ((0, p*np.pi, np.pi, (1+p)*np.pi),
-       (-p*np.pi, 0, (1-p)*np.pi, np.pi),
-       (-np.pi, (1-p)*np.pi, 0, p*np.pi),
-       ((-1-p)*np.pi, -np.pi, -p*np.pi, 0))
+    
+    # 0.5      0.0
+    # 0.25     0.75
+    self.PHI_walk = 2*np.pi*np.array(
+      ((0, 0.5, 0.75, 0.25),
+       (-0.5, 0, 0.25, -0.25),
+       (0.25, -0.25, 0, 0.5),
+       (-0.25, 0.25, 0.5, 0))
     )
-    # FR xxx_______ 
-    # FL xxx_______
-    # RR ____xxx___
-    # RL ____xxx___
+    
+    # 0.5      0.5
+    # 0.0      0.0
     self.PHI_bound = np.array(
       ((0, 0, np.pi, np.pi),
        (0, 0, np.pi, np.pi),
        (-np.pi, -np.pi,0, 0),
        (-np.pi, -np.pi,0, 0))
     )
-    # FR xx__________
-    # FL ___xx_______
-    # RR ______xx____
-    # RL _________xx_
+
+    # 0.0      0.5
+    # 0.0      0.5
     self.PHI_pace = np.array(
-      ((0, 0.5*np.pi, np.pi, 1.5*np.pi),
-       (-0.5*np.pi, 0, 0.5*np.pi, np.pi),
-       (-np.pi, -0.5*np.pi, 0, 0.5*np.pi),
-       (-1.5*np.pi, -np.pi, -0.5*np.pi, 0))
+      ((0, np.pi, 0, np.pi),
+       (np.pi, 0, np.pi, 0),
+       (np.pi, 0, np.pi, 0),
+       (0, np.pi, 0, np.pi))
     )
 
     if gait == "TROT":
@@ -126,7 +125,7 @@ class HopfNetwork():
       raise ValueError( gait + 'not implemented.')
 
 
-  def update(self, contactInfo):
+  def update(self, contactInfo = None):
     """ Update oscillator states. """
 
     # update parameters, integrate
@@ -143,11 +142,11 @@ class HopfNetwork():
     return x, z
       
         
-  def _integrate_hopf_equations(self, contactBool):
+  def _integrate_hopf_equations(self, contactBool = None):
     """ Hopf polar equations and integration. Use equations 6 and 7. """
     # bookkeeping - save copies of current CPG states 
     X = self.X.copy()
-    X_dot = np.zeros((2,4))
+    self.X_dot = np.zeros((2,4))
     alpha = 50 
     F = 10
 
@@ -159,15 +158,16 @@ class HopfNetwork():
       r_dot = alpha * (self._mu - r**2) * r # [tODO]
       # determine whether oscillator i is in swing or stance phase to set natural frequency omega_swing or omega_stance (see Section 3)
       # swinging
-      if theta < np.pi:
-        theta_dot = self._omega_swing
-        if contactBool[i]:
-          theta_dot += F
+      if contactBool is None:
+        if theta < np.pi:
+          theta_dot = self._omega_swing
+        else:
+          theta_dot = self._omega_stance
       else:
-        theta_dot = self._omega_stance
-        if not contactBool[i]:
-          theta_dot += F
-
+        if theta < np.pi:
+          theta_dot = self._omega_swing + F
+        else:
+          theta_dot = self._omega_stance + F
       # theta_dot = self._omega_swing if theta < np.pi else self._omega_stance # [tODO]
 
       # loop through other oscillators to add coupling (Equation 7)
@@ -176,10 +176,10 @@ class HopfNetwork():
           theta_dot += X[0, j] * self._coupling_strength * np.sin(X[1, j] - theta - self.PHI[i, j]) # [tODO] Question?
 
       # set X_dot[:,i]
-      X_dot[:,i] = [r_dot, theta_dot]
+      self.X_dot[:,i] = [r_dot, theta_dot]
 
     # integrate 
-    self.X += X_dot*self._dt  # [tODO]
+    self.X += self.X_dot*self._dt  # [tODO]
     # mod phase variables to keep between 0 and 2pi
     self.X[1,:] = self.X[1,:] % (2*np.pi)
 
@@ -197,20 +197,28 @@ if __name__ == "__main__":
                       isRLGymInterface=False,     # not using RL
                       time_step=TIME_STEP,
                       action_repeat=1,
-                      motor_control_mode="TORQUE",
+                      motor_control_mode="PD",
                       add_noise=False,    # start in ideal conditions
                       # record_video=True
                       )
 
   # initialize Hopf Network, supply gait
-  cpg = HopfNetwork(time_step=TIME_STEP)
+  cpg = HopfNetwork(time_step=TIME_STEP, gait="WALK")
 
-  TEST_STEPS = int(10 / (TIME_STEP))
+  TEST_STEPS = int(1 / (TIME_STEP))
   t = np.arange(TEST_STEPS)*TIME_STEP
 
-  # [TODO] initialize data structures to save CPG and robot states
-  cpg_history = np.zeros((TEST_STEPS, 2, 4))
+  # initialize data structures to save CPG and robot states
+  # No. step * 4 legs * (r, theta, dr, dtheta)
+  cpg_history = np.zeros((TEST_STEPS, 4, 4))
   action_history = np.zeros((TEST_STEPS, 12))
+  history_leg_ind = 0
+  history_leg_motor_ids = [env.robot._thigh_ids[history_leg_ind], env.robot._calf_ids[history_leg_ind], env.robot._foot_link_ids[history_leg_ind]]
+  foot_desire_history = np.zeros((TEST_STEPS, 3))
+  foot_real_history = np.zeros((TEST_STEPS, 3))
+  angles_desire_history = np.zeros((TEST_STEPS, 3))
+  angles_real_history = np.zeros((TEST_STEPS, 3))
+  velocity_history = np.zeros((TEST_STEPS, 3))
 
   ############## Sample Gains
   # joint PD gains
@@ -240,9 +248,9 @@ if __name__ == "__main__":
       # get desired foot i pos (xi, yi, zi) in leg frame
       leg_xyz = np.array([xs[i],sideSign[i] * foot_y,zs[i]])
       # call inverse kinematics to get corresponding joint angles (see ComputeInverseKinematics() in quadruped.py)
-      leg_q = env.robot.ComputeInverseKinematics(i, leg_xyz) # [TODO] # Coordination: Shoulder
+      leg_q = env.robot.ComputeInverseKinematics(i, leg_xyz) # [tODO] # Coordination: Shoulder
       # Add joint PD contribution to tau for leg i (Equation 4)
-      tau += kp * (leg_q - q[i]) + kd * -dq[i] # [TODO]  
+      tau += kp * (leg_q - q[i]) + kd * -dq[i] # [tODO]  
 
       # add Cartesian PD contribution
       if ADD_CARTESIAN_PD:
@@ -251,17 +259,25 @@ if __name__ == "__main__":
         # Get current foot velocity in leg frame (Equation 2)
         vel = np.matmul(J, np.array([dq[i]]).T)
         # Calculate torque contribution from Cartesian PD (Equation 5) [Make sure you are using matrix multiplications]
-        tau += np.matmul(J.T, np.matmul(kpCartesian,np.array([leg_xyz - pos]).T) + np.matmul(kdCartesian, -vel))[:,0] # [TODO]
+        tau += np.matmul(J.T, np.matmul(kpCartesian,np.array([leg_xyz - pos]).T) + np.matmul(kdCartesian, -vel))[:,0] # [tODO]
 
       # Set tau for legi in action vector
       action[3*i:3*i+3] = tau
 
+      if i == history_leg_ind:
+        foot_desire_history[j,:] = leg_xyz
+        angles_desire_history[j,:] = leg_q
+
     # send torques to robot and simulate TIME_STEP seconds 
     env.step(action) 
 
-    # [TODO] save any CPG or robot states
-    cpg_history[j,:] = np.array((xs, zs))
+    # [tODO] save any CPG or robot states
+    cpg_history[j,:] = np.concatenate((cpg.X, cpg.X_dot), axis=0)
     action_history[j, :] = action
+    J, foot_real_history[j, :] = env.robot.ComputeJacobianAndPosition(history_leg_ind)
+    angles_real_history[j,:] = env.robot.GetMotorAngles()[history_leg_motor_ids]
+    velocity_history[j,:] = env.robot.GetBaseLinearVelocity()
+
 
 
 
@@ -269,11 +285,29 @@ if __name__ == "__main__":
   # PLOTS
   #####################################################
   # example
-  # fig = plt.figure()
-  # plt.plot(t,cpg_history[:,0, 1], label='cpg xs FL')
-  # plt.plot(t,cpg_history[:,1, 1], label='cpg zs FL')
-  # plt.legend()
-  # plt.show()
+  fig = plt.figure()
+  leg_names = ["FR", "FL", "RR", "RL"]
+  scales = [1, np.pi, 10, 200]
+  for i in range(4):
+    plt.subplot(2,2,1+i)
+    plt.title(leg_names[i])
+    for j in range(4):
+      plt.plot(cpg_history[:,j,i]/scales[j])
+    plt.legend(["r","theta","dr","dtheta"])
+
+  fig = plt.figure()
+  plt.title("Position " + leg_names[history_leg_ind] +" Real vs Desire")
+  plt.plot(foot_real_history)
+  plt.plot(foot_desire_history)
+  plt.legend(["real_x","real_y","real_z","desire_x","desire_y","desire_z"])
+
+  fig = plt.figure()
+  plt.title("Angles " + leg_names[history_leg_ind] +" Real vs Desire")
+  plt.plot(angles_real_history)
+  plt.plot(angles_desire_history)
+  plt.legend(["real_thigh","real_calf","real_foot","desire_thigh","desire_calf","desire_foot"])
+
+  plt.show()
 
   # plt.plot(action_history[:, 0], label = 'action FR q0')
   # plt.plot(action_history[:, 3], label = 'action FL q0')
