@@ -223,9 +223,13 @@ if __name__ == "__main__":
                       add_noise=False,    # start in ideal conditions
                       # record_video=True
                       )
+  gait_name = "TROT"
+  gait_direction = np.pi/2# left #0.0 # forward
+  notpureforward = True if gait_direction != 0.0 else False
+  step_length = 0.04
 
   # initialize Hopf Network, supply gait
-  cpg = HopfNetwork(time_step=TIME_STEP, gait="TROT", omega=2*np.pi)
+  cpg = HopfNetwork(time_step=TIME_STEP, gait=gait_name, omega=10*2*np.pi, des_step_len=step_length)
 
   TEST_STEPS = int(3 / (TIME_STEP))
   t = np.arange(TEST_STEPS)*TIME_STEP
@@ -260,6 +264,11 @@ if __name__ == "__main__":
     # get desired foot positions from CPG 
     numValidContacts, numInvalidContacts, feetNormalForces, feetInContactBool = env.robot.GetContactInfo()
     xs,zs = cpg.update() #feetInContactBool
+    ys = foot_y * sideSign
+    if notpureforward:
+      ys += np.sin(gait_direction) * xs
+      xs = np.cos(gait_direction) * xs
+
     # [tODO] get current motor angles and velocities for joint PD, see GetMotorAngles(), GetMotorVelocities() in quadruped.py
     q_last = env.robot.GetMotorAngles()
     dq = env.robot.GetMotorVelocities()
@@ -271,7 +280,7 @@ if __name__ == "__main__":
       # initialize torques for legi
       tau = np.zeros(3)
       # get desired foot i pos (xi, yi, zi) in leg frame
-      leg_xyz = np.array([xs[i],sideSign[i] * foot_y,zs[i]])
+      leg_xyz = np.array([xs[i],ys[i],zs[i]])
       # call inverse kinematics to get corresponding joint angles (see ComputeInverseKinematics() in quadruped.py)
       leg_q = env.robot.ComputeInverseKinematics(i, leg_xyz) # [tODO] # Coordination: Shoulder
 
