@@ -15,7 +15,7 @@ from utils.file_utils import get_latest_model
 from env.quadruped_gym_env import QuadrupedGymEnv
 
 
-LEARNING_ALG = "SAC" # "PPO" or "SAC"
+LEARNING_ALG = "PPO" # "PPO" or "SAC"
 LOAD_NN = False # if you want to initialize training with a previous model 
 NUM_ENVS = 1    # how many pybullet environments to create for data collection
 USE_GPU = True # make sure to install all necessary drivers 
@@ -26,7 +26,7 @@ env_configs = {"motor_control_mode":"CARTESIAN_PD",
                "observation_space_mode": "LR_COURSE_OBS"}
 
 
-if USE_GPU: #and LEARNING_ALG=="SAC":
+if USE_GPU and LEARNING_ALG=="SAC":
     gpu_arg = "auto" 
 else:
     gpu_arg = "cpu"
