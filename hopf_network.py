@@ -2,7 +2,7 @@
 Author: Chengkun Li
 LastEditors: Chengkun Li
 Date: 2021-11-30 01:47:27
-LastEditTime: 2021-12-01 01:42:59
+LastEditTime: 2021-12-17 19:43:11
 Description: Legged Robot Project 2 CPG & HOPF Network part
 FilePath: /lr-proj2-quad-cpg-rl/hopf_network.py
 '''
@@ -39,6 +39,9 @@ parser.add_argument('--noise', dest='noise', action='store_true')
 # parser.add_argument()
 args = parser.parse_args()
 logger.info(args)
+
+# Fix random seed
+np.random.seed(0)
 
 class HopfNetwork():
   """ CPG network based on hopf polar equations mapped to foot positions in Cartesian space.  
@@ -282,11 +285,10 @@ if __name__ == "__main__":
   #####################################################
   # example
   if args.plot:
-    fig = plt.figure()
-    plt.subplot(211)
-    plt.plot(t, foot_pos[:, 1, 0], label='FR foot z')
-    plt.legend()
-    plt.subplot(212)
-    plt.plot(t,joint_pos[:, 0, 1], label='FR thigh')
-    plt.legend()
+    fig, ax = plt.subplots(2, 1, sharex=True)
+    # ax.set_title('Plots of CPG')
+    ax[0].plot(t, foot_pos[:, 1, 0], label='FR foot z')
+    ax[0].set(title='Foot position')
+    ax[1].plot(t, joint_pos[:, 0, 1], label='FR thigh')
+    ax[1].set(title='Joint position')
     plt.show()
