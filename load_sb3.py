@@ -2,7 +2,7 @@
 Author: Chengkun Li
 LastEditors: Chengkun Li
 Date: 2021-12-01 02:23:02
-LastEditTime: 2021-12-18 16:17:54
+LastEditTime: 2021-12-18 22:47:31
 Description: Modify here please
 FilePath: /lr-proj2-quad-cpg-rl/load_sb3.py
 '''
@@ -79,22 +79,95 @@ episode_reward = 0
 
 # [TODO] initialize arrays to save data from simulation 
 #
-obs_arr = []
-rewards_arr = []
-dones_arr = []
-info_arr = []
-robot_speed = []
 
+steps = 2000
+# Plot only one trail
+only_once = True
+base_linear = np.zeros([steps, 3])
+base_angular = np.zeros([steps, 3])
+motor_angles = np.zeros([steps, 4, 3])
+foot_pos = np.zeros([steps, 4, 3])
+contact_info = np.zeros([steps, 4])
+base_pos = np.zeros([steps, 3])
 
-for i in range(2000):
+for i in range(steps):
     action, _states = model.predict(obs,deterministic=False) # sample at test time? ([TODO]: test)
     # logging.info(type(_states))
+
     obs, rewards, dones, info = env.step(action)
+    
+    base_pos[i, :] = np.array(info[0]['base_pos'])
+    """
+    obs: 1x47
+    self._observation = np.concatenate((
+        self.robot.GetBaseLinearVelocity(), # 3x1
+        self.robot.GetBaseAngularVelocity(), # 3x1
+        self.robot.GetMotorAngles(), # 12x1
+        self.robot.GetMotorVelocities(), # 12x1
+        self.robot.GetMotorTorques(), # 12x1
+        self.robot.GetBaseOrientation(), # 4x1
+        foot_pos, # 12x1
+        foot_vel, # 12x1
+        np.array(self.robot.GetContactInfo()[3]) # 4x1
+      ))
+    """
+    tmp = obs.reshape(-1,)
+    base_linear[i, :] = tmp[0:3]
+    base_angular[i, :] = tmp[3:6]
+    foot_pos[i, :, :] = tmp[6:18].reshape(4, 3)
+    contact_info[i, :] = tmp[70:74]
     episode_reward += rewards
     if dones:
         print('episode_reward', episode_reward)
         episode_reward = 0
-
+        if only_once:
+          steps = i
+          break
     # [TODO] save data from current robot states for plots 
-    # robot_speed.append(robot.GetMotorVelocities())
+
+
 # [TODO] make plots:
+
+"""
+Foot order: FR, FL, RR, RL
+"""
+# Plot speed
+fig, ax = plt.subplots(nrows=4, constrained_layout=True, sharex=True)
+t = np.arange(steps)
+ax[0].set_xlabel('Time steps')
+ax[0].plot(t, base_linear[:steps, 0], label='X speed')
+ax[0].legend()
+ax[1].plot(t, base_linear[:steps, 1], label='Y speed')
+ax[1].legend()
+ax[2].plot(t, base_linear[:steps, 2], label='Z speed')
+ax[2].legend()
+ax[3].plot(t, np.sqrt(base_linear[:steps, 0]**2 + base_linear[:steps, 1]**2 + base_linear[:steps, 2]**2)\
+, label='Total speed')
+avg = np.mean(np.sqrt(base_linear[:steps, 0]**2 + base_linear[:steps, 1]**2 + base_linear[:steps, 2]**2))
+ax[3].plot(t, np.ones([steps]) * avg, label='Average speed')
+ax[3].set(title='Average speed is {}'.format(avg))
+ax[3].legend()
+
+# Plot foot contact information
+fig, ax = plt.subplots(nrows=2, sharex=True)
+leg_name = ['FR', 'FL', 'RR', 'RL']
+ax[0].set_xlabel('Time steps')
+for i in range(2):
+  ax[0].plot(t, contact_info[:steps, i], label='Contact information of {}'.format(leg_name[i]))
+ax[0].legend()
+
+for i in range(2, 4):
+  ax[1].plot(t, contact_info[:steps, i], label='Contact information of {}'.format(leg_name[i]))
+ax[1].legend()
+
+# Plot base position
+fig, ax = plt.subplots()
+ax.plot(base_pos[:steps, 0], base_pos[:steps, 1])
+ax.set(title='Base position of Legged robot')
+ax.scatter(base_pos[0, 0], base_pos[0, 1], s=90, c='r', marker='X', label='Start Point')
+logger.info((base_pos[0, 0], base_pos[0, 1]))
+ax.scatter(base_pos[steps-1, 0], base_pos[steps-1, 1], s=90, c='g', marker='*', label='End Point')
+logger.info((base_pos[steps-1, 0], base_pos[steps-1, 1]))
+
+ax.legend()
+plt.show()
