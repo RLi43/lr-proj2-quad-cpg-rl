@@ -50,7 +50,7 @@ class HopfNetwork():
     # self._omega_swing = omega_swing
     # self._omega_stance = omega_stance  
     self._couple = couple
-    self._coupling_strength = coupling_strength
+    self._coupling_strength = coupling_strength * np.array((4,4))
     self._dt = time_step
     self._set_gait(gait)
 
@@ -103,6 +103,14 @@ class HopfNetwork():
        (-np.pi, -np.pi,0, 0))
     )
 
+    gallop_param1 = 0.1
+    self.PHI_gallop = 2*np.pi*np.array(
+     ((0, 1-gallop_param1, 0.5, 0.5),
+      (gallop_param1, 0, gallop_param1-0.5, gallop_param1-0.5),
+      (0.5, 0.5-gallop_param1, 0, 0),
+      (0.5, 0.5-gallop_param1, 0, 0))
+    )
+
     # 0.0      0.5
     # 0.0      0.5
     self.PHI_pace = np.array(
@@ -112,29 +120,64 @@ class HopfNetwork():
        (0, np.pi, 0, np.pi))
     )
 
+    self.PHI_pronk = np.zeros((4,4))
+
+    # [2] fig.1 (a)
+    self.coupling1 = np.array(
+      ((1, 1, 0.5, 0.1),
+      (1, 1, 0.1, 0.5),
+      (0.5, 0.1, 1, 1),
+      (0.1, 0.5, 1, 1),
+      )
+    )
+    # [2] fig.1 (b)
+    self.coupling2 = np.array(
+      ((1, 1, 0.5, 0.1),
+      (1, 1, 0.1, 0.5),
+      (0.1, 0.5, 1, 1),
+      (0.5, 0.1, 1, 1),
+      )
+    )
+
     if gait == "TROT":
       print('TROT')
       self.PHI = self.PHI_trot
       # running trot
       self._omega_swing = self._omega
-      self._omega_stance = self._omega * 4.0
+      self._omega_stance = self._omega * 2.0
+      self._coupling_strength = self.coupling1
     elif gait == "PACE":
       print('PACE')
       self.PHI = self.PHI_pace
       # running pace
       self._omega_swing = self._omega
-      self._omega_stance = self._omega * 4.0
+      self._omega_stance = self._omega * 2.0
+      self._coupling_strength = self.coupling1
     elif gait == "BOUND":
       print('BOUND')
       self.PHI = self.PHI_bound
       # running bound
-      self._omega_swing = self._omega
-      self._omega_stance = self._omega * 4.0
+      self._omega_swing = self._omega * 2.0
+      self._omega_stance = self._omega
+      self._coupling_strength = self.coupling1
     elif gait == "WALK":
       print('WALK')
       self.PHI = self.PHI_walk
-      self._omega_swing = self._omega * 2.0
+      self._omega_swing = self._omega
+      self._omega_stance = self._omega * 4.0
+      self._coupling_strength = self.coupling2
+    elif gait == "GALLOP":
+      print('GALLOP')
+      self.PHI = self.PHI_gallop
+      self._omega_swing = self._omega * 6.0
       self._omega_stance = self._omega
+      self._coupling_strength = self.coupling1
+    elif gait == "PRONK":
+      print('PRONK')
+      self.PHI = self.PHI_pronk
+      self._omega_swing = self._omega * 6.0
+      self._omega_stance = self._omega
+      self._coupling_strength = np.ones((4, 4))
     else:
       raise ValueError( gait + 'not implemented.')
 
@@ -161,13 +204,14 @@ class HopfNetwork():
     return x, z
       
         
-  def _integrate_hopf_equations(self, contactBool = None):
+  def _integrate_hopf_equations(self, contactInfo = None):
     """ Hopf polar equations and integration. Use equations 6 and 7. """
     # bookkeeping - save copies of current CPG states 
     X = self.X.copy()
     self.X_dot = np.zeros((2,4))
     alpha = 50 
-    F = 10
+    F = 100
+    force_threshold = 10 # 120N/4
 
     # loop through each leg's oscillator
     for i in range(4):
@@ -177,22 +221,37 @@ class HopfNetwork():
       r_dot = alpha * (self._mu - r**2) * r # [tODO]
       # determine whether oscillator i is in swing or stance phase to set natural frequency omega_swing or omega_stance (see Section 3)
       # swinging
-      if contactBool is None:
-        if theta < np.pi:
-          theta_dot = self._omega_swing
-        else:
-          theta_dot = self._omega_stance
+      if theta < np.pi:
+        theta_dot = self._omega_swing
       else:
-        if theta < np.pi:
-          theta_dot = self._omega_swing + F
-        else:
-          theta_dot = self._omega_stance + F
+        theta_dot = self._omega_stance
       # theta_dot = self._omega_swing if theta < np.pi else self._omega_stance # [tODO]
 
       # loop through other oscillators to add coupling (Equation 7)
       if self._couple:
         for j in range(4):
-          theta_dot += X[0, j] * self._coupling_strength * np.sin(X[1, j] - theta - self.PHI[i, j]) # [tODO] Question?
+          theta_dot += X[0, j] * self._coupling_strength[i,j] * np.sin(X[1, j] - theta - self.PHI[i, j]) # [tODO] Question?
+
+      if contactInfo is not None:
+        contactBool, forceNormal = contactInfo
+        # [2] III B
+        # Stopping before transition
+        # 1. swing to stance, not contact
+        # 2. stance to swing, support a lot
+        # Fast transitions
+        # 1. during stance, support few
+        # 2. during swing, contact
+        suppose_theta = theta + theta_dot*self._dt*1.1 #
+        if theta < np.pi: #swing
+          if suppose_theta > np.pi and not contactBool[i]:
+            theta_dot = 0
+          elif contactBool[i]:
+            theta_dot += F
+        else:
+          if suppose_theta > 2*np.pi and (forceNormal[i] > force_threshold): # TODO
+            theta_dot = 0
+          elif forceNormal[i] < force_threshold:
+            theta_dot += F
 
       # set X_dot[:,i]
       self.X_dot[:,i] = [r_dot, theta_dot]
@@ -207,9 +266,19 @@ class HopfNetwork():
 if __name__ == "__main__":
 
   ADD_CARTESIAN_PD = True
-  ADD_JOINT_PD = False
+  ADD_JOINT_PD = True
+  USE_FEEDBACK = True
+  ON_RACK = False
+  gait_name = "WALK"
+  gait_direction = 0.0 # forward
+  step_length = 0.04
+  base_omega = 5*2*np.pi
+
   if not ADD_CARTESIAN_PD and not ADD_JOINT_PD:
     raise("At least one PD needed")
+  if ON_RACK and USE_FEEDBACK:
+    raise("Can not use feedback when on rack")
+  notpureforward = True if gait_direction != 0.0 else False
   TIME_STEP = 0.001
   foot_y = 0.0838 # this is the hip length 
   sideSign = np.array([-1, 1, -1, 1]) # get correct hip sign (body right is negative)
@@ -223,13 +292,10 @@ if __name__ == "__main__":
                       add_noise=False,    # start in ideal conditions
                       # record_video=True
                       )
-  gait_name = "TROT"
-  gait_direction = np.pi/2# left #0.0 # forward
-  notpureforward = True if gait_direction != 0.0 else False
-  step_length = 0.04
+
 
   # initialize Hopf Network, supply gait
-  cpg = HopfNetwork(time_step=TIME_STEP, gait=gait_name, omega=10*2*np.pi, des_step_len=step_length)
+  cpg = HopfNetwork(time_step=TIME_STEP, gait=gait_name, omega=base_omega, des_step_len=step_length)
 
   TEST_STEPS = int(3 / (TIME_STEP))
   t = np.arange(TEST_STEPS)*TIME_STEP
@@ -262,8 +328,11 @@ if __name__ == "__main__":
     # initialize torque array to send to motors
     action = np.zeros(12) 
     # get desired foot positions from CPG 
-    numValidContacts, numInvalidContacts, feetNormalForces, feetInContactBool = env.robot.GetContactInfo()
-    xs,zs = cpg.update() #feetInContactBool
+    if USE_FEEDBACK:
+      numValidContacts, numInvalidContacts, feetNormalForces, feetInContactBool = env.robot.GetContactInfo()
+      xs,zs = cpg.update((feetInContactBool, feetNormalForces)) #feetInContactBool
+    else:
+      xs,zs = cpg.update()
     ys = foot_y * sideSign
     if notpureforward:
       ys += np.sin(gait_direction) * xs
@@ -361,9 +430,9 @@ if __name__ == "__main__":
   history_phase_change = np.array(history_phase_change)
   history_duration = history_phase_change[1:] - history_phase_change[:-1]
   try:
-    start_of_a_cycle = history_phase_change.reshape(-1, 2)
-  except:
     start_of_a_cycle = history_phase_change[:-1].reshape(-1, 2)
+  except:
+    start_of_a_cycle = history_phase_change[:-2].reshape(-1, 2)
 
   start_of_a_cycle = start_of_a_cycle[:,0]*TIME_STEP
   k = int(len(history_duration)/2)
