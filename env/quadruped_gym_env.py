@@ -129,7 +129,7 @@ class QuadrupedGymEnv(gym.Env):
     self._action_bound = 1.0
 
     self._cmd_base_vel_normed = np.array([1.0, 0.0, 0.0])
-    self._cmd_base_speed = 1.5
+    self._cmd_base_speed = 2.5
 
     self.setupActionSpace()
     self.setupObservationSpace()
@@ -280,7 +280,9 @@ class QuadrupedGymEnv(gym.Env):
     base_linaer_vel_ortho = base_linear_vel_normed - base_linear_vel_proj*self._cmd_base_vel_normed
     droll, dpitch, _ = self.robot.GetBaseAngularVelocity()
     # base motion reward
-    rwd_base_motion = np.exp(-1.5*np.linalg.norm(base_linaer_vel_ortho)**2) + np.exp(-1.5*(droll**2 + dpitch**2))
+    rwd_base_motion = np.exp(-1.5*np.linalg.norm(base_linaer_vel_ortho)**2)
+    # split these two terms
+    rwd_base_level = np.exp(-1.5*(droll**2 + dpitch**2))
 
     ang_rot = np.arctan2(self._cmd_base_vel_normed[2], self._cmd_base_vel_normed[1])
     axs_rot = np.array([0.0, 0.0, 1.0])
@@ -297,7 +299,9 @@ class QuadrupedGymEnv(gym.Env):
     # command speed reward
     rwd_cmd_speed = np.exp(-0.1*(np.linalg.norm(base_linear_vel) - self._cmd_base_speed)**2)
 
-    reward = 0.05*rwd_linear_vel + 0.04*rwd_base_motion + 0.05*rwd_cmd_speed + 0.05*rwd_orient + 0.00002*rwd_energy + 0.01
+    # reward = 0.05*rwd_linear_vel + 0.04*rwd_base_motion + 0.04*rwd_base_level + 0.05*rwd_cmd_speed + 0.05*rwd_orient + 0.00002*rwd_energy + 0.01
+    # reward = 0.05*rwd_linear_vel + 0.04*rwd_base_motion + 0.01*rwd_base_level + 0.05*rwd_cmd_speed + 0.05*rwd_orient + 0.00001*rwd_energy
+    reward = 0.05*rwd_linear_vel + 0.04*rwd_base_motion + 0.04*rwd_base_level + 0.05*rwd_cmd_speed + 0.09*rwd_orient + 0.00001*rwd_energy
 
     return reward
 
