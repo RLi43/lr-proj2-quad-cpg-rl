@@ -294,7 +294,7 @@ class QuadrupedGymEnv(gym.Env):
     torques = self.robot.GetMotorTorques()
     dq = self.robot.GetMotorVelocities()
     # energy reward
-    rwd_energy = -self._time_step*self._action_repeat*np.dot(np.absolute(torques), np.absolute(dq))
+    rwd_energy = -self._time_step*self._action_repeat*np.absolute(np.dot(torques, dq))
 
     # command speed reward
     rwd_cmd_speed = np.exp(-0.1*(np.linalg.norm(base_linear_vel) - self._cmd_base_speed)**2)
