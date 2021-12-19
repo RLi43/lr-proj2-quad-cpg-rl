@@ -1,8 +1,8 @@
 '''
 Author: Chengkun Li
-LastEditors: Chengkun Li
+LastEditors: Please set LastEditors
 Date: 2021-12-01 02:23:02
-LastEditTime: 2021-12-18 22:47:31
+LastEditTime: 2021-12-19 11:00:21
 Description: Modify here please
 FilePath: /lr-proj2-quad-cpg-rl/load_sb3.py
 '''
@@ -41,7 +41,7 @@ from utils.file_utils import get_latest_model, load_all_results
 LEARNING_ALG = "PPO"
 interm_dir = "./logs/intermediate_models/"
 # path to saved models, i.e. interm_dir + '111121133812'
-log_dir = interm_dir + '121821140524'
+log_dir = interm_dir + '121921093324'
 
 # initialize env configs (render at test time)
 # check ideal conditions, as well as robustness to UNSEEN noise during training
@@ -82,7 +82,7 @@ episode_reward = 0
 
 steps = 2000
 # Plot only one trail
-only_once = True
+only_once = False
 base_linear = np.zeros([steps, 3])
 base_angular = np.zeros([steps, 3])
 motor_angles = np.zeros([steps, 4, 3])
@@ -112,6 +112,7 @@ for i in range(steps):
       ))
     """
     tmp = obs.reshape(-1,)
+    logger.info('Current speed: {}, normed: {}'.format(tmp[0:3], np.linalg.norm(tmp[0:3])))
     base_linear[i, :] = tmp[0:3]
     base_angular[i, :] = tmp[3:6]
     foot_pos[i, :, :] = tmp[6:18].reshape(4, 3)
@@ -134,7 +135,6 @@ Foot order: FR, FL, RR, RL
 # Plot speed
 fig, ax = plt.subplots(nrows=4, constrained_layout=True, sharex=True)
 t = np.arange(steps)
-ax[0].set_xlabel('Time steps')
 ax[0].plot(t, base_linear[:steps, 0], label='X speed')
 ax[0].legend()
 ax[1].plot(t, base_linear[:steps, 1], label='Y speed')
@@ -147,6 +147,7 @@ avg = np.mean(np.sqrt(base_linear[:steps, 0]**2 + base_linear[:steps, 1]**2 + ba
 ax[3].plot(t, np.ones([steps]) * avg, label='Average speed')
 ax[3].set(title='Average speed is {}'.format(avg))
 ax[3].legend()
+ax[3].set_xlabel('Time steps')
 
 # Plot foot contact information
 fig, ax = plt.subplots(nrows=2, sharex=True)
@@ -160,14 +161,17 @@ for i in range(2, 4):
   ax[1].plot(t, contact_info[:steps, i], label='Contact information of {}'.format(leg_name[i]))
 ax[1].legend()
 
-# Plot base position
-fig, ax = plt.subplots()
-ax.plot(base_pos[:steps, 0], base_pos[:steps, 1])
-ax.set(title='Base position of Legged robot')
-ax.scatter(base_pos[0, 0], base_pos[0, 1], s=90, c='r', marker='X', label='Start Point')
-logger.info((base_pos[0, 0], base_pos[0, 1]))
-ax.scatter(base_pos[steps-1, 0], base_pos[steps-1, 1], s=90, c='g', marker='*', label='End Point')
-logger.info((base_pos[steps-1, 0], base_pos[steps-1, 1]))
 
-ax.legend()
+if only_once:
+  # Plot base position
+  fig, ax = plt.subplots()
+  ax.plot(base_pos[:steps, 0], base_pos[:steps, 1])
+  ax.set(title='Base position of Legged robot')
+  ax.scatter(base_pos[0, 0], base_pos[0, 1], s=90, c='r', marker='X', label='Start Point')
+  logger.info((base_pos[0, 0], base_pos[0, 1]))
+  ax.scatter(base_pos[steps-1, 0], base_pos[steps-1, 1], s=90, c='g', marker='*', label='End Point')
+  ax.legend()
+  logger.info((base_pos[steps-1, 0], base_pos[steps-1, 1]))
+
+
 plt.show()

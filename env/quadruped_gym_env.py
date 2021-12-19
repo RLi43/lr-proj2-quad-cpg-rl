@@ -1,8 +1,8 @@
 '''
 Author: Legged Robots
-LastEditors: Chengkun Li
+LastEditors: Please set LastEditors
 Date: 2021-11-30 22:27:51
-LastEditTime: 2021-12-18 02:05:13
+LastEditTime: 2021-12-19 11:01:34
 Description: This file implements the gym environment for a quadruped.
 FilePath: /lr-proj2-quad-cpg-rl/env/quadruped_gym_env.py
 '''
@@ -168,7 +168,7 @@ class QuadrupedGymEnv(gym.Env):
       # Note 50 is arbitrary below, you may have more or less
       observation_high = (np.concatenate((
         np.array([5.] * 3),
-        np.array([5.] * 3),
+        np.array([.5] * 3),
         self._robot_config.UPPER_ANGLE_JOINT,
         self._robot_config.VELOCITY_LIMITS,
         self._robot_config.TORQUE_LIMITS,
@@ -179,7 +179,7 @@ class QuadrupedGymEnv(gym.Env):
       )) + OBSERVATION_EPS)
       observation_low = (np.concatenate((
         np.array([5.] * 3),
-        np.array([-.05] * 3),
+        np.array([-.5] * 3),
         self._robot_config.LOWER_ANGLE_JOINT,
         -self._robot_config.VELOCITY_LIMITS,
         -self._robot_config.TORQUE_LIMITS,
@@ -188,7 +188,7 @@ class QuadrupedGymEnv(gym.Env):
         np.array([-5.0] * 12),
         np.array([-1.0] * 4)
       )) -  OBSERVATION_EPS)
-      logger.info("Action space dimension: {}".format(observation_high.shape))
+      logger.info("Observational space dimension: {}".format(observation_high.shape))
     else:
       raise ValueError("observation space not defined or not intended")
 
