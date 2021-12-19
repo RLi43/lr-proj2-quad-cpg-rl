@@ -38,6 +38,7 @@ env_config = {"motor_control_mode":"CARTESIAN_PD",
 env_config['render'] = True
 env_config['record_video'] = True
 env_config['add_noise'] = False 
+env_config['competition_env'] = True
 
 # get latest model and normalization stats, and plot 
 stats_path = os.path.join(log_dir, "vec_normalize.pkl")
@@ -73,8 +74,11 @@ for i in range(2000):
     episode_reward += rewards
     if dones:
         print('episode_reward', episode_reward)
+        print('Final base position', info[0]['base_pos'])
         episode_reward = 0
 
     # [TODO] save data from current robot states for plots 
-
+    # To get base position, for example: env.envs[0].env.robot.GetBasePosition() 
+    #
+    
 # [TODO] make plots:
