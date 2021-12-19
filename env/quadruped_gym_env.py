@@ -129,7 +129,7 @@ class QuadrupedGymEnv(gym.Env):
     self._action_bound = 1.0
 
     self._cmd_base_vel_normed = np.array([1.0, 0.0, 0.0])
-    self._cmd_base_speed = 2.5
+    self._cmd_base_speed = 1.5
 
     self.setupActionSpace()
     self.setupObservationSpace()
@@ -299,9 +299,14 @@ class QuadrupedGymEnv(gym.Env):
     # command speed reward
     rwd_cmd_speed = np.exp(-0.1*(np.linalg.norm(base_linear_vel) - self._cmd_base_speed)**2)
 
-    # reward = 0.05*rwd_linear_vel + 0.04*rwd_base_motion + 0.04*rwd_base_level + 0.05*rwd_cmd_speed + 0.05*rwd_orient + 0.00002*rwd_energy + 0.01
-    # reward = 0.05*rwd_linear_vel + 0.04*rwd_base_motion + 0.01*rwd_base_level + 0.05*rwd_cmd_speed + 0.05*rwd_orient + 0.00001*rwd_energy
-    reward = 0.05*rwd_linear_vel + 0.04*rwd_base_motion + 0.04*rwd_base_level + 0.05*rwd_cmd_speed + 0.09*rwd_orient + 0.00001*rwd_energy
+    # remove the limit on speed
+    rwd_speed = 1 - np.exp(-0.1*np.linalg.norm(base_linear_vel)**2)
+
+    # reward = 0.05*rwd_linear_vel + 0.04*rwd_base_motion + 0.04*rwd_base_level + 0.05*rwd_cmd_speed + 0.05*rwd_orient + 0.00002*rwd_energy + 0.01  #SAC
+    # reward = 0.05*rwd_linear_vel + 0.04*rwd_base_motion + 0.01*rwd_base_level + 0.05*rwd_cmd_speed + 0.05*rwd_orient + 0.00001*rwd_energy  # SAC
+    # reward = 0.05*rwd_linear_vel + 0.04*rwd_base_motion + 0.04*rwd_base_level + 0.05*rwd_cmd_speed + 0.09*rwd_orient + 0.00001*rwd_energy   #PPO
+    # reward = 0.06*rwd_linear_vel + 0.04*rwd_base_motion + 0.04*rwd_base_level + 0.05*rwd_speed + 0.04*rwd_orient + 0.00001*rwd_energy  # SAC
+    reward = 0.06*rwd_linear_vel + 0.04*rwd_base_motion + 0.04*rwd_base_level + 0.05*rwd_speed + 0.04*rwd_orient + 0.00001*rwd_energy  # PPO
 
     return reward
 
