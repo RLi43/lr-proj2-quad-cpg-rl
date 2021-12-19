@@ -66,7 +66,13 @@ obs = env.reset()
 episode_reward = 0
 
 # [TODO] initialize arrays to save data from simulation 
-#
+# Base_pos = np.zeros((2000, 3))
+# Base_vel = np.zeros((2000, 3))
+# Motor_ang = np.zeros((2000, 12))
+# Motor_vel = np.zeros((2000, 12))
+# Motor_torq = np.zeros((2000, 12))
+# Base_orient = np.zeros((2000, 4))
+States = np.zeros((2000, 73))
 
 for i in range(2000):
     action, _states = model.predict(obs,deterministic=False) # sample at test time? ([TODO]: test)
@@ -79,6 +85,21 @@ for i in range(2000):
 
     # [TODO] save data from current robot states for plots 
     # To get base position, for example: env.envs[0].env.robot.GetBasePosition() 
-    #
+    States[i, 0:3] = env.envs[0].env.robot.GetBasePosition()
+    States[i, 3:73] = env.envs[0].env._observation
     
 # [TODO] make plots:
+time_step = env.envs[0].env._time_step
+t = np.arange(2000)*time_step
+
+Base_pos = States[:, 0:3]
+base_x = States[:, 0]
+base_y = States[:, 1]
+
+fig, axs = plt.subplots(1, 2)
+axs[0].plot(t, base_x, label='X')
+axs[0].plot(t, base_y, label='Y')
+axs[0].set_title('Base Position X/Y-Time')
+
+axs[1].plot(base_x, base_y)
+axs[1].set_title('Base Position Y-X')
