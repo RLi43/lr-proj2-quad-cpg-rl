@@ -100,6 +100,9 @@ fig, axs = plt.subplots(1, 2)
 axs[0].plot(t, base_x, label='X')
 axs[0].plot(t, base_y, label='Y')
 axs[0].set_title('Base Position X/Y-Time')
+axs[0].legend()
 
 axs[1].plot(base_x, base_y)
 axs[1].set_title('Base Position Y-X')
+
+plt.show()
