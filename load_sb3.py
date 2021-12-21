@@ -2,7 +2,7 @@
 Author: Chengkun Li
 LastEditors: Chengkun Li
 Date: 2021-12-01 02:23:02
-LastEditTime: 2021-12-21 01:48:40
+LastEditTime: 2021-12-21 02:48:42
 Description: Modify here please
 FilePath: /lr-proj2-quad-cpg-rl/load_sb3.py
 '''
@@ -51,6 +51,7 @@ env_config = {"motor_control_mode":"CARTESIAN_PD",
 env_config['render'] = True
 env_config['record_video'] = False
 env_config['add_noise'] = True 
+env_config['test_env'] = True
 
 # get latest model and normalization stats, and plot 
 stats_path = os.path.join(log_dir, "vec_normalize.pkl")
@@ -95,6 +96,11 @@ motor_torques = np.zeros([steps, 4, 3])
 # for calculation of COT
 q_hist = 0
 energy = 0
+# start index for a test trail
+start_i = 0
+distance = 0
+x, y = 0, 0
+x_prev, y_prev = 0, 0
 for i in range(steps):
     action, _states = model.predict(obs,deterministic=False) # sample at test time? ([TODO]: test)
     # logging.info(type(_states))
@@ -125,31 +131,45 @@ for i in range(steps):
     foot_pos[i, :, :] = tmp[46:58].reshape(4, 3)
     contact_info[i, :] = tmp[70:74]
     episode_reward += rewards
-    if dones:
-        print('episode_reward', episode_reward)
-        episode_reward = 0
-        if only_once:
-          steps = i
-          break
-    # [TODO] save data from current robot states for plots 
-    # Calculate energy cost
+
+    # Calculate energy
     q = motor_angles[i, :, :].ravel()
     energy += sum((q - q_hist) * motor_torques[i, :, :].ravel())
     # logger.info('Current consumed energy: {}'.format(energy))
     q_hist = q
+    x, y = base_pos[i, 0], base_pos[i, 1]
+    if i > 0:
+      dx, dy = x - x_prev, y - y_prev  
+    else:
+      dx, dy = 0, 0
+    x_prev, y_prev = x, y
+    distance += np.sqrt(dx**2 + dy**2)
+
+    if dones:
+        logger.info('episode_reward: {}'.format(episode_reward))
+        logger.info('Total energy is {}'.format(energy))
+        logger.info('Total distance traveled: {}', distance)
+        logger.info('COT = {}'.format(energy/distance))
+        episode_reward = 0
+        energy = 0
+        distance = 0
+        
+        
+        if only_once:
+          steps = i
+          break
+    
+    
+    
+    # [TODO] save data from current robot states for plots 
+    
 
 
 # [TODO] make plots:
-logger.info('Total energy is {}'.format(energy))
 
-distance = 0
-x, y = base_pos[steps-1, 0], base_pos[steps-1, 1]
-for i in range(steps):
-  dx, dy = base_pos[i, 0]-x, base_pos[i, 1]-y
-  distance += np.sqrt(dx**2 + dy**2)
-  x, y = base_pos[i, 0], base_pos[i, 1]
-logger.info('Total distance traveled: {}', distance)
-logger.info('COT = {}'.format(energy/distance))
+
+
+
 
 """
 Foot order: FR, FL, RR, RL
@@ -165,7 +185,7 @@ ax[2].plot(t, base_linear[:steps, 2], label='Z speed')
 ax[2].legend()
 ax[3].plot(t, np.sqrt(base_linear[:steps, 0]**2 + base_linear[:steps, 1]**2 + base_linear[:steps, 2]**2)\
 , label='Total speed')
-avg = np.mean(np.sqrt(base_linear[:steps, 0]**2 + base_linear[:steps, 1]**2 + base_linear[:steps, 2]**2))
+avg = np.mean(np.sqrt(base_linear[:steps, 0]**2 + base_linear[:steps, 1]**2))
 ax[3].plot(t, np.ones([steps]) * avg, label='Average speed')
 ax[3].set(title='Average speed is {}'.format(avg))
 ax[3].legend()
