@@ -170,7 +170,8 @@ class QuadrupedGymEnv(gym.Env):
                                           self._robot_config.TORQUE_LIMITS, 
                                           np.array([1.0]*4), 
                                           np.array([1.0]*12), 
-                                          np.array([5.0]*12))) + OBSERVATION_EPS)
+                                          np.array([5.0]*12), 
+                                          np.array([1.0]*4))) + OBSERVATION_EPS)
       observation_low = (np.concatenate((np.array([-5.0]*3), 
                                          np.array([-5.0]*3), 
                                          self._robot_config.LOWER_ANGLE_JOINT, 
@@ -178,7 +179,8 @@ class QuadrupedGymEnv(gym.Env):
                                          -self._robot_config.TORQUE_LIMITS, 
                                          np.array([-1.0]*4), 
                                          np.array([-1.0]*12), 
-                                         np.array([-5.0]*12))) - OBSERVATION_EPS)
+                                         np.array([-5.0]*12), 
+                                         np.array([0.0]*4))) - OBSERVATION_EPS)
     else:
       raise ValueError("observation space not defined or not intended")
 
@@ -218,7 +220,8 @@ class QuadrupedGymEnv(gym.Env):
                                           self.robot.GetMotorTorques(), 
                                           self.robot.GetBaseOrientation(),  
                                           foot_p, 
-                                          foot_v))
+                                          foot_v, 
+                                          np.array(self.robot.GetContactInfo()[3])))
 
     else:
       raise ValueError("observation space not defined or not intended")
@@ -313,7 +316,8 @@ class QuadrupedGymEnv(gym.Env):
     # reward = 0.05*rwd_linear_vel + 0.04*rwd_base_motion + 0.01*rwd_base_level + 0.05*rwd_cmd_speed + 0.05*rwd_orient + 0.00001*rwd_energy  # SAC
     # reward = 0.05*rwd_linear_vel + 0.04*rwd_base_motion + 0.04*rwd_base_level + 0.05*rwd_cmd_speed + 0.09*rwd_orient + 0.00001*rwd_energy   #PPO
     # reward = 0.06*rwd_linear_vel + 0.04*rwd_base_motion + 0.04*rwd_base_level + 0.05*rwd_speed + 0.04*rwd_orient + 0.00001*rwd_energy  # SAC
-    reward = 0.06*rwd_linear_vel + 0.04*rwd_base_motion + 0.04*rwd_base_level + 0.05*rwd_speed + 0.04*rwd_orient + 0.00001*rwd_energy  # PPO
+    # reward = 0.06*rwd_linear_vel + 0.04*rwd_base_motion + 0.04*rwd_base_level + 0.05*rwd_speed + 0.04*rwd_orient + 0.00001*rwd_energy  # PPO
+    reward = 0.05*rwd_linear_vel + 0.02*rwd_base_motion + 0.02*rwd_base_level + 0.05*rwd_speed + 0.02*rwd_orient + 0.0001*rwd_energy  # PPO
 
     return reward
 
