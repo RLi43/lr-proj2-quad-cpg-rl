@@ -2,7 +2,7 @@
 Author: Chengkun Li
 LastEditors: Chengkun Li
 Date: 2021-12-01 02:23:02
-LastEditTime: 2021-12-21 02:48:42
+LastEditTime: 2021-12-21 23:43:49
 Description: Modify here please
 FilePath: /lr-proj2-quad-cpg-rl/load_sb3.py
 '''
@@ -41,7 +41,7 @@ from utils.file_utils import get_latest_model, load_all_results
 LEARNING_ALG = "PPO"
 interm_dir = "./logs/intermediate_models/"
 # path to saved models, i.e. interm_dir + '111121133812'
-log_dir = interm_dir + '122121011655'
+log_dir = interm_dir + '122121232213'
 
 # initialize env configs (render at test time)
 # check ideal conditions, as well as robustness to UNSEEN noise during training
@@ -51,7 +51,7 @@ env_config = {"motor_control_mode":"CARTESIAN_PD",
 env_config['render'] = True
 env_config['record_video'] = False
 env_config['add_noise'] = True 
-env_config['test_env'] = True
+env_config['test_env'] = False
 
 # get latest model and normalization stats, and plot 
 stats_path = os.path.join(log_dir, "vec_normalize.pkl")
@@ -83,7 +83,7 @@ episode_reward = 0
 
 steps = 2000
 # Plot only one trail
-only_once = False
+only_once = True
 base_linear = np.zeros([steps, 3])
 base_angular = np.zeros([steps, 3])
 motor_angles = np.zeros([steps, 4, 3])
@@ -107,7 +107,7 @@ for i in range(steps):
 
     obs, rewards, dones, info = env.step(action)
     
-    base_pos[i, :] = np.array(info[0]['base_pos'])
+    base_pos[i, :] = env.envs[0].env.robot.GetBasePosition()
     """
     obs: 1x47
     self._observation = np.concatenate((
@@ -122,14 +122,19 @@ for i in range(steps):
         np.array(self.robot.GetContactInfo()[3]) # 4x1
       ))
     """
-    tmp = obs.reshape(-1,)
     # logger.info('Current speed: {}, normed: {}'.format(tmp[0:3], np.linalg.norm(tmp[0:3])))
-    base_linear[i, :] = tmp[0:3]
-    base_angular[i, :] = tmp[3:6]
-    motor_angles[i, :, :] = tmp[6:18].reshape(4, 3)
-    motor_torques[i, :, :] = tmp[18:30].reshape(4, 3)
-    foot_pos[i, :, :] = tmp[46:58].reshape(4, 3)
-    contact_info[i, :] = tmp[70:74]
+    base_linear[i, :] = env.envs[0].env.robot.GetBaseLinearVelocity()
+    logger.info('speed vector: {}'.format(base_linear[i, :]))
+    base_angular[i, :] = env.envs[0].env.robot.GetBaseAngularVelocity()
+    motor_angles[i, :, :] = env.envs[0].env.robot.GetMotorAngles().reshape(4, 3)
+    motor_torques[i, :, :] = env.envs[0].env.robot.GetMotorTorques().reshape(4, 3)
+    
+    foot_pos_tmp = []
+    for legid in range(4):
+      _, pos = env.envs[0].env.robot.ComputeJacobianAndPosition(legid)
+      foot_pos_tmp += pos.tolist()
+    foot_pos[i, :, :] = np.array(foot_pos_tmp).reshape(4, 3)    
+    contact_info[i, :] = np.array(env.envs[0].env.robot.GetContactInfo()[3])
     episode_reward += rewards
 
     # Calculate energy
@@ -216,12 +221,12 @@ if only_once:
   logger.info((base_pos[steps-1, 0], base_pos[steps-1, 1]))
 
 # Plot foot position
-# fig, ax = plt.subplots()
-# for i in range(1):
-#   ax.plot(base_pos[:steps, 0] + foot_pos[:steps, i, 0], \
-#     base_pos[:steps, 1] + foot_pos[:steps, i, 1],\
-#        label='Foot trajectory of {}'.format(leg_name[i]))
-# ax.legend()
+fig, ax = plt.subplots()
+for i in range(4):
+  ax.scatter(base_pos[:steps, 0] + foot_pos[:steps, i, 0], \
+    base_pos[:steps, 1] + foot_pos[:steps, i, 1],\
+       label='Foot trajectory of {}'.format(leg_name[i]), s=3)
+ax.legend()
 
 
 

@@ -2,7 +2,7 @@
 Author: Legged Robots
 LastEditors: Chengkun Li
 Date: 2021-11-30 22:27:51
-LastEditTime: 2021-12-21 01:15:37
+LastEditTime: 2021-12-21 23:21:37
 Description: This file implements the gym environment for a quadruped.
 FilePath: /lr-proj2-quad-cpg-rl/env/quadruped_gym_env.py
 '''
@@ -167,8 +167,8 @@ class QuadrupedGymEnv(gym.Env):
       # [TODO] Set observation upper and lower ranges. What are reasonable limits? 
       # Note 50 is arbitrary below, you may have more or less
       observation_high = (np.concatenate((
-        np.array([10.] * 3),
-        np.array([3.] * 3),
+        np.array([19.] * 3),
+        np.array([.1] * 3),
         self._robot_config.UPPER_ANGLE_JOINT,
         self._robot_config.VELOCITY_LIMITS,
         self._robot_config.TORQUE_LIMITS,
@@ -178,8 +178,8 @@ class QuadrupedGymEnv(gym.Env):
         np.array([1.0] * 4)
       )) + OBSERVATION_EPS)
       observation_low = (np.concatenate((
-        np.array([-10.] * 3),
-        np.array([-3.] * 3),
+        np.array([-19.] * 3),
+        np.array([-.1] * 3),
         self._robot_config.LOWER_ANGLE_JOINT,
         -self._robot_config.VELOCITY_LIMITS,
         -self._robot_config.TORQUE_LIMITS,
