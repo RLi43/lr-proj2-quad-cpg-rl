@@ -1,8 +1,8 @@
 '''
 Author: Chengkun Li
-LastEditors: Please set LastEditors
+LastEditors: Chengkun Li
 Date: 2021-12-01 02:23:02
-LastEditTime: 2021-12-19 11:00:21
+LastEditTime: 2021-12-21 01:48:40
 Description: Modify here please
 FilePath: /lr-proj2-quad-cpg-rl/load_sb3.py
 '''
@@ -41,7 +41,7 @@ from utils.file_utils import get_latest_model, load_all_results
 LEARNING_ALG = "PPO"
 interm_dir = "./logs/intermediate_models/"
 # path to saved models, i.e. interm_dir + '111121133812'
-log_dir = interm_dir + '121921093324'
+log_dir = interm_dir + '122121011655'
 
 # initialize env configs (render at test time)
 # check ideal conditions, as well as robustness to UNSEEN noise during training
@@ -50,7 +50,7 @@ env_config = {"motor_control_mode":"CARTESIAN_PD",
                "observation_space_mode": "LR_COURSE_OBS"}
 env_config['render'] = True
 env_config['record_video'] = False
-env_config['add_noise'] = False 
+env_config['add_noise'] = True 
 
 # get latest model and normalization stats, and plot 
 stats_path = os.path.join(log_dir, "vec_normalize.pkl")
@@ -89,7 +89,12 @@ motor_angles = np.zeros([steps, 4, 3])
 foot_pos = np.zeros([steps, 4, 3])
 contact_info = np.zeros([steps, 4])
 base_pos = np.zeros([steps, 3])
+motor_angles = np.zeros([steps, 4, 3])
+motor_torques = np.zeros([steps, 4, 3])
 
+# for calculation of COT
+q_hist = 0
+energy = 0
 for i in range(steps):
     action, _states = model.predict(obs,deterministic=False) # sample at test time? ([TODO]: test)
     # logging.info(type(_states))
@@ -112,10 +117,12 @@ for i in range(steps):
       ))
     """
     tmp = obs.reshape(-1,)
-    logger.info('Current speed: {}, normed: {}'.format(tmp[0:3], np.linalg.norm(tmp[0:3])))
+    # logger.info('Current speed: {}, normed: {}'.format(tmp[0:3], np.linalg.norm(tmp[0:3])))
     base_linear[i, :] = tmp[0:3]
     base_angular[i, :] = tmp[3:6]
-    foot_pos[i, :, :] = tmp[6:18].reshape(4, 3)
+    motor_angles[i, :, :] = tmp[6:18].reshape(4, 3)
+    motor_torques[i, :, :] = tmp[18:30].reshape(4, 3)
+    foot_pos[i, :, :] = tmp[46:58].reshape(4, 3)
     contact_info[i, :] = tmp[70:74]
     episode_reward += rewards
     if dones:
@@ -125,9 +132,24 @@ for i in range(steps):
           steps = i
           break
     # [TODO] save data from current robot states for plots 
+    # Calculate energy cost
+    q = motor_angles[i, :, :].ravel()
+    energy += sum((q - q_hist) * motor_torques[i, :, :].ravel())
+    # logger.info('Current consumed energy: {}'.format(energy))
+    q_hist = q
 
 
 # [TODO] make plots:
+logger.info('Total energy is {}'.format(energy))
+
+distance = 0
+x, y = base_pos[steps-1, 0], base_pos[steps-1, 1]
+for i in range(steps):
+  dx, dy = base_pos[i, 0]-x, base_pos[i, 1]-y
+  distance += np.sqrt(dx**2 + dy**2)
+  x, y = base_pos[i, 0], base_pos[i, 1]
+logger.info('Total distance traveled: {}', distance)
+logger.info('COT = {}'.format(energy/distance))
 
 """
 Foot order: FR, FL, RR, RL
@@ -152,7 +174,7 @@ ax[3].set_xlabel('Time steps')
 # Plot foot contact information
 fig, ax = plt.subplots(nrows=2, sharex=True)
 leg_name = ['FR', 'FL', 'RR', 'RL']
-ax[0].set_xlabel('Time steps')
+ax[1].set_xlabel('Time steps')
 for i in range(2):
   ax[0].plot(t, contact_info[:steps, i], label='Contact information of {}'.format(leg_name[i]))
 ax[0].legend()
@@ -162,8 +184,8 @@ for i in range(2, 4):
 ax[1].legend()
 
 
+# Plot base position
 if only_once:
-  # Plot base position
   fig, ax = plt.subplots()
   ax.plot(base_pos[:steps, 0], base_pos[:steps, 1])
   ax.set(title='Base position of Legged robot')
@@ -172,6 +194,16 @@ if only_once:
   ax.scatter(base_pos[steps-1, 0], base_pos[steps-1, 1], s=90, c='g', marker='*', label='End Point')
   ax.legend()
   logger.info((base_pos[steps-1, 0], base_pos[steps-1, 1]))
+
+# Plot foot position
+# fig, ax = plt.subplots()
+# for i in range(1):
+#   ax.plot(base_pos[:steps, 0] + foot_pos[:steps, i, 0], \
+#     base_pos[:steps, 1] + foot_pos[:steps, i, 1],\
+#        label='Foot trajectory of {}'.format(leg_name[i]))
+# ax.legend()
+
+
 
 
 plt.show()
