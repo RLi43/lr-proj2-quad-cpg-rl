@@ -2,7 +2,7 @@
 Author: Chengkun Li
 LastEditors: Chengkun Li
 Date: 2021-11-30 01:47:27
-LastEditTime: 2021-12-17 19:43:11
+LastEditTime: 2021-12-28 19:54:31
 Description: Legged Robot Project 2 CPG & HOPF Network part
 FilePath: /lr-proj2-quad-cpg-rl/hopf_network.py
 '''
@@ -54,7 +54,7 @@ class HopfNetwork():
                 omega_swing=args.omega_swing*2*np.pi,  # MUST EDIT
                 omega_stance=args.omega_stance*2*np.pi, # MUST EDIT
                 gait=args.gait,            # change depending on desired gait
-                coupling_strength=1,    # coefficient to multiply coupling matrix
+                coupling_strength=args.omega_stance*2*np.pi,    # coefficient to multiply coupling matrix
                 couple=True,            # should couple
                 time_step=0.001,        # time step 
                 ground_clearance=0.05,  # foot swing height 
@@ -101,12 +101,11 @@ class HopfNetwork():
     # FL xxx___xxxx
     # RR xx___xxxxx
     # RL xxxxxxx___
-    p = 0.4
-    self.PHI_walk = np.array(
-      ((0, p*np.pi, np.pi, (1+p)*np.pi),
-       (-p*np.pi, 0, (1-p)*np.pi, np.pi),
-       (-np.pi, (1-p)*np.pi, 0, p*np.pi),
-       ((-1-p)*np.pi, -np.pi, -p*np.pi, 0))
+    self.PHI_walk = 2*np.pi*np.array(
+      ((0, 0.5, 0.75, 0.25),
+       (-0.5, 0, 0.25, -0.25),
+       (0.25, -0.25, 0, 0.5),
+       (-0.25, 0.25, 0.5, 0))
     )
     # FR xxx_______ 
     # FL xxx_______
@@ -204,7 +203,7 @@ if __name__ == "__main__":
   sideSign = np.array([-1, 1, -1, 1]) # get correct hip sign (body right is negative)
 
   env = QuadrupedGymEnv(render=True,              # visualize
-                      on_rack=False,              # useful for debugging! 
+                      on_rack=True,              # useful for debugging! 
                       isRLGymInterface=False,     # not using RL
                       time_step=TIME_STEP,
                       action_repeat=1,
