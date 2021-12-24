@@ -2,7 +2,7 @@
 Author: Chengkun Li
 LastEditors: Chengkun Li
 Date: 2021-12-01 02:23:02
-LastEditTime: 2021-12-21 23:43:49
+LastEditTime: 2021-12-23 15:19:54
 Description: Modify here please
 FilePath: /lr-proj2-quad-cpg-rl/load_sb3.py
 '''
@@ -41,7 +41,7 @@ from utils.file_utils import get_latest_model, load_all_results
 LEARNING_ALG = "PPO"
 interm_dir = "./logs/intermediate_models/"
 # path to saved models, i.e. interm_dir + '111121133812'
-log_dir = interm_dir + '122121232213'
+log_dir = interm_dir + '122321010925'
 
 # initialize env configs (render at test time)
 # check ideal conditions, as well as robustness to UNSEEN noise during training
@@ -50,16 +50,21 @@ env_config = {"motor_control_mode":"CARTESIAN_PD",
                "observation_space_mode": "LR_COURSE_OBS"}
 env_config['render'] = True
 env_config['record_video'] = False
-env_config['add_noise'] = True 
+env_config['add_noise'] = False 
 env_config['test_env'] = False
+env_config['competition_env'] = False
+
+plot_monitor = True
+
 
 # get latest model and normalization stats, and plot 
 stats_path = os.path.join(log_dir, "vec_normalize.pkl")
 model_name = get_latest_model(log_dir)
-monitor_results = load_results(log_dir)
-logging.info(monitor_results)
-plot_results([log_dir] , 10e10, 'timesteps', LEARNING_ALG + ' ')
-plt.show() 
+if plot_monitor:
+  monitor_results = load_results(log_dir)
+  logging.info(monitor_results)
+  plot_results([log_dir] , 10e10, 'timesteps', LEARNING_ALG + ' ')
+  plt.show() 
 
 # reconstruct env 
 env = lambda: QuadrupedGymEnv(**env_config)
@@ -83,7 +88,7 @@ episode_reward = 0
 
 steps = 2000
 # Plot only one trail
-only_once = True
+only_once = False
 base_linear = np.zeros([steps, 3])
 base_angular = np.zeros([steps, 3])
 motor_angles = np.zeros([steps, 4, 3])
@@ -124,7 +129,7 @@ for i in range(steps):
     """
     # logger.info('Current speed: {}, normed: {}'.format(tmp[0:3], np.linalg.norm(tmp[0:3])))
     base_linear[i, :] = env.envs[0].env.robot.GetBaseLinearVelocity()
-    logger.info('speed vector: {}'.format(base_linear[i, :]))
+    # logger.info('speed vector: {}'.format(base_linear[i, :]))
     base_angular[i, :] = env.envs[0].env.robot.GetBaseAngularVelocity()
     motor_angles[i, :, :] = env.envs[0].env.robot.GetMotorAngles().reshape(4, 3)
     motor_torques[i, :, :] = env.envs[0].env.robot.GetMotorTorques().reshape(4, 3)
@@ -155,6 +160,7 @@ for i in range(steps):
         logger.info('Total energy is {}'.format(energy))
         logger.info('Total distance traveled: {}', distance)
         logger.info('COT = {}'.format(energy/distance))
+        logger.info('Final base position: {}'.format(info[0]['base_pos']))
         episode_reward = 0
         energy = 0
         distance = 0
