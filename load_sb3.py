@@ -1,4 +1,6 @@
 import os, sys
+
+from matplotlib.colors import Normalize, from_levels_and_colors
 import gym
 import numpy as np
 import time
@@ -74,6 +76,8 @@ episode_reward = 0
 # Base_orient = np.zeros((2000, 4))
 States = np.zeros((2000, 77))
 
+Forces_n = np.zeros((2000, 4))
+
 for i in range(2000):
     action, _states = model.predict(obs,deterministic=False) # sample at test time? ([TODO]: test)
     obs, rewards, dones, info = env.step(action)
@@ -87,6 +91,8 @@ for i in range(2000):
     # To get base position, for example: env.envs[0].env.robot.GetBasePosition() 
     States[i, 0:3] = env.envs[0].env.robot.GetBasePosition()
     States[i, 3:77] = env.envs[0].env._observation
+
+    Forces_n[i, :] = env.envs[0].env.robot.GetContactInfo()[2]
     
 # [TODO] make plots:
 time_step = env.envs[0].env._time_step
@@ -110,3 +116,20 @@ plt.show()
 ofile = open('robot_states_rl.csv', 'wb')
 np.savetxt(ofile, States, delimiter=',')
 ofile.close()
+
+print('\n\n')
+print('Max Normal Force: ')
+print(np.amax(Forces_n, axis=0))
+print(np.mean(Forces_n, axis=0))
+print('\n\n')
+
+ofile = open('normal_forces.csv', 'wb')
+np.savetxt(ofile, Forces_n, delimiter=',')
+ofile.close()
+
+# max normal forces
+# [911 842 952 776]
+# [1.19e+03 748 1.25e+03 633]
+# [1.03e+03 822 723 938]
+# average...
+# [37 28.4 32 37.3]
