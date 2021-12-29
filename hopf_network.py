@@ -2,7 +2,7 @@
 Author: Chengkun Li
 LastEditors: Chengkun Li
 Date: 2021-11-30 01:47:27
-LastEditTime: 2021-12-28 19:54:31
+LastEditTime: 2021-12-28 20:28:46
 Description: Legged Robot Project 2 CPG & HOPF Network part
 FilePath: /lr-proj2-quad-cpg-rl/hopf_network.py
 '''
@@ -54,7 +54,7 @@ class HopfNetwork():
                 omega_swing=args.omega_swing*2*np.pi,  # MUST EDIT
                 omega_stance=args.omega_stance*2*np.pi, # MUST EDIT
                 gait=args.gait,            # change depending on desired gait
-                coupling_strength=args.omega_stance*2*np.pi,    # coefficient to multiply coupling matrix
+                coupling_strength=args.omega_swing*2*np.pi,    # coefficient to multiply coupling matrix
                 couple=True,            # should couple
                 time_step=0.001,        # time step 
                 ground_clearance=0.05,  # foot swing height 
@@ -122,10 +122,10 @@ class HopfNetwork():
     # RR ______xx____
     # RL _________xx_
     self.PHI_pace = np.array(
-      ((0, 0.5*np.pi, np.pi, 1.5*np.pi),
-       (-0.5*np.pi, 0, 0.5*np.pi, np.pi),
-       (-np.pi, -0.5*np.pi, 0, 0.5*np.pi),
-       (-1.5*np.pi, -np.pi, -0.5*np.pi, 0))
+      ((0, np.pi, 0, np.pi),
+       (np.pi, 0, np.pi, 0),
+       (np.pi, 0, np.pi, 0),
+       (0, np.pi, 0, np.pi))
     )
 
     if gait == "TROT":
