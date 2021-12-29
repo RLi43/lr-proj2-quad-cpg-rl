@@ -9,7 +9,7 @@ from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize
 from stable_baselines3 import PPO, SAC
 from stable_baselines3.common.env_util import make_vec_env
 # utils
-from utils.utils import CheckpointCallback
+from utils.utils import CheckpointCallback, CmdVelCallback
 from utils.file_utils import get_latest_model
 # gym environment
 from env.quadruped_gym_env import QuadrupedGymEnv
@@ -24,7 +24,8 @@ USE_GPU = True  # make sure to install all necessary drivers
 # after implementing, you will want to test how well the agent learns with your MDP: 
 env_configs = {"motor_control_mode":"CARTESIAN_PD",
                "task_env": "LR_COURSE_TASK",
-               "observation_space_mode": "LR_COURSE_OBS"}
+               "observation_space_mode": "LR_COURSE_OBS", 
+               "rand_env": True}
 # env_configs = {}
 
 if USE_GPU and LEARNING_ALG=="SAC":
@@ -43,16 +44,18 @@ if LOAD_NN:
 SAVE_PATH = './logs/intermediate_models/'+ datetime.now().strftime("%m%d%y%H%M%S") + '/'
 os.makedirs(SAVE_PATH, exist_ok=True)
 # checkpoint to save policy network periodically
-checkpoint_callback = CheckpointCallback(save_freq=30000, save_path=SAVE_PATH,name_prefix='rl_model', verbose=2)
+checkpoint_callback = CheckpointCallback(save_freq=max(30000//NUM_ENVS, 1), save_path=SAVE_PATH, name_prefix='rl_model', verbose=2)
+cmdvel_callback = CmdVelCallback(freq=50000, n_envs=NUM_ENVS, verbose=2)
+
 # create Vectorized gym environment
 env = lambda: QuadrupedGymEnv(**env_configs)  
-env = make_vec_env(env, monitor_dir=SAVE_PATH,n_envs=NUM_ENVS)
+env = make_vec_env(env, monitor_dir=SAVE_PATH, n_envs=NUM_ENVS)
 # normalize observations to stabilize learning (why?)
 env = VecNormalize(env, norm_obs=True, norm_reward=False, clip_obs=100.)
 
 if LOAD_NN:
     env = lambda: QuadrupedGymEnv(**env_configs)
-    env = make_vec_env(env, n_envs=NUM_ENVS)
+    env = make_vec_env(env, monitor_dir=SAVE_PATH, n_envs=NUM_ENVS)
     env = VecNormalize.load(stats_path, env)
 
 # Multi-layer perceptron (MLP) policy of two layers of size _,_ 
@@ -108,7 +111,7 @@ if LOAD_NN:
     print("\nLoaded model", model_name, "\n")
 
 # Learn and save (may need to train for longer)
-model.learn(total_timesteps=1000000, log_interval=1,callback=checkpoint_callback)
+model.learn(total_timesteps=1000000, log_interval=1,callback=[checkpoint_callback, cmdvel_callback])
 # Don't forget to save the VecNormalize statistics when saving the agent
 model.save( os.path.join(SAVE_PATH, "rl_model" ) ) 
 env.save(os.path.join(SAVE_PATH, "vec_normalize.pkl" )) 

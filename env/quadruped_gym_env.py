@@ -77,6 +77,7 @@ class QuadrupedGymEnv(gym.Env):
       add_noise=True,
       test_env=False,
       competition_env=False, # NOT ALLOWED FOR TRAINING!
+      rand_env=False,
       **kwargs): # any extra arguments from legacy
     """Initialize the quadruped gym environment.
 
@@ -116,6 +117,7 @@ class QuadrupedGymEnv(gym.Env):
     self._add_noise = add_noise
     self._using_test_env = test_env
     self._using_competition_env = competition_env
+    self._using_rand_env = rand_env
     if competition_env:
       test_env = False
       self._using_test_env = False
@@ -123,6 +125,9 @@ class QuadrupedGymEnv(gym.Env):
     if test_env:
       self._add_noise = True
       self._observation_noise_stdev = 0.01 #
+    if rand_env:
+      self._add_noise = True
+      self._observation_noise_stdev = 0.01
     else:
       self._observation_noise_stdev = 0.0
 
@@ -171,7 +176,8 @@ class QuadrupedGymEnv(gym.Env):
                                           np.array([1.0]*4), 
                                           np.array([1.0]*12), 
                                           np.array([5.0]*12), 
-                                          np.array([1.0]*4))) + OBSERVATION_EPS)
+                                          np.array([1.0]*4), 
+                                          np.array([1500.0]*4))) + OBSERVATION_EPS)
       observation_low = (np.concatenate((np.array([-5.0]*3), 
                                          np.array([-5.0]*3), 
                                          self._robot_config.LOWER_ANGLE_JOINT, 
@@ -180,6 +186,7 @@ class QuadrupedGymEnv(gym.Env):
                                          np.array([-1.0]*4), 
                                          np.array([-1.0]*12), 
                                          np.array([-5.0]*12), 
+                                         np.array([0.0]*4), 
                                          np.array([0.0]*4))) - OBSERVATION_EPS)
     else:
       raise ValueError("observation space not defined or not intended")
@@ -221,7 +228,8 @@ class QuadrupedGymEnv(gym.Env):
                                           self.robot.GetBaseOrientation(),  
                                           foot_p, 
                                           foot_v, 
-                                          np.array(self.robot.GetContactInfo()[3])))
+                                          np.array(self.robot.GetContactInfo()[3]), 
+                                          np.array(self.robot.GetContactInfo()[2])))
 
     else:
       raise ValueError("observation space not defined or not intended")
@@ -312,12 +320,33 @@ class QuadrupedGymEnv(gym.Env):
     # remove the limit on speed
     rwd_speed = 1 - np.exp(-0.1*np.linalg.norm(base_linear_vel)**2)
 
-    # reward = 0.05*rwd_linear_vel + 0.04*rwd_base_motion + 0.04*rwd_base_level + 0.05*rwd_cmd_speed + 0.05*rwd_orient + 0.00002*rwd_energy + 0.01  #SAC
+    # foot height reward?
+    foot_p = np.zeros(12)
+
+    for i in range(4):
+        _, foot_p[3*i:3*i+3] = self.robot.ComputeJacobianAndPosition(i)
+
+    foot_z = foot_p[2:12:3]
+    foot_contact_bool = np.array(self.robot.GetContactInfo()[3])
+
+    robot_height = 0.25
+    foot_z += robot_height
+    # foot height should be in a resonable range
+    max_ground_clearance = 0.12
+    foot_z[foot_z > max_ground_clearance] = max_ground_clearance
+    # foot height could be smaller than -robot_height --> ground penetration
+    foot_z[foot_z < 0] = 0
+
+    rwd_ft_hgt = 1 - np.exp(-2.0*np.dot(foot_z, 1 - foot_contact_bool))
+
+    # reward = 0.05*rwd_linear_vel + 0.04*rwd_base_motion + 0.04*rwd_base_level + 0.05*rwd_cmd_speed + 0.05*rwd_orient + 0.00002*rwd_energy + 0.01  # SAC
     # reward = 0.05*rwd_linear_vel + 0.04*rwd_base_motion + 0.01*rwd_base_level + 0.05*rwd_cmd_speed + 0.05*rwd_orient + 0.00001*rwd_energy  # SAC
-    # reward = 0.05*rwd_linear_vel + 0.04*rwd_base_motion + 0.04*rwd_base_level + 0.05*rwd_cmd_speed + 0.09*rwd_orient + 0.00001*rwd_energy   #PPO
+    # reward = 0.05*rwd_linear_vel + 0.04*rwd_base_motion + 0.04*rwd_base_level + 0.05*rwd_cmd_speed + 0.09*rwd_orient + 0.00001*rwd_energy  # PPO
     # reward = 0.06*rwd_linear_vel + 0.04*rwd_base_motion + 0.04*rwd_base_level + 0.05*rwd_speed + 0.04*rwd_orient + 0.00001*rwd_energy  # SAC
     # reward = 0.06*rwd_linear_vel + 0.04*rwd_base_motion + 0.04*rwd_base_level + 0.05*rwd_speed + 0.04*rwd_orient + 0.00001*rwd_energy  # PPO
-    reward = 0.05*rwd_linear_vel + 0.02*rwd_base_motion + 0.02*rwd_base_level + 0.05*rwd_speed + 0.02*rwd_orient + 0.0001*rwd_energy  # PPO
+    # reward = 0.05*rwd_linear_vel + 0.02*rwd_base_motion + 0.02*rwd_base_level + 0.05*rwd_speed + 0.02*rwd_orient + 0.0001*rwd_energy  # PPO
+    # reward = 0.05*rwd_linear_vel + 0.02*rwd_base_motion + 0.03*rwd_base_level + 0.05*rwd_speed + 0.02*rwd_orient + 0.0001*rwd_energy  # PPO
+    reward = 0.05*rwd_linear_vel + 0.02*rwd_base_motion + 0.03*rwd_base_level + 0.05*rwd_speed + 0.02*rwd_orient + 0.01*rwd_ft_hgt + 0.0001*rwd_energy  # PPO
 
     return reward
 
@@ -454,9 +483,12 @@ class QuadrupedGymEnv(gym.Env):
         self._pybullet_client.changeDynamics(self.plane, -1, lateralFriction=ground_mu_k)
         if self._is_render:
           print('ground friction coefficient is', ground_mu_k)
+      
+      if self._using_rand_env:
+        self.add_random_boxes()
 
       if self._using_test_env:
-        self.add_random_boxes()
+        self.add_random_boxes(50, 0.15)
         self._add_base_mass_offset()
 
     else:

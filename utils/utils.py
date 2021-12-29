@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 from glob import glob
 import pandas
 import json
+from run_sb3 import NUM_ENVS
 
 #from stable_baselines.bench.monitor import load_results
 from stable_baselines3.common.monitor import load_results
@@ -51,6 +52,38 @@ class CheckpointCallback(BaseCallback):
             # also print out path periodically for off-policy aglorithms: SAC, TD3, etc.
             print('=================================== Save path is {}'.format(self.save_path))
         return True
+
+class CmdVelCallback(BaseCallback):
+    def __init__(self, freq: int, n_envs: int, verbose=0):
+        super(CmdVelCallback, self).__init__(verbose)
+        self.freq = max(freq//n_envs, 1)
+        self.cmd_vel_num = 4
+        self.cmd_vel_normed_list = np.zeros((self.cmd_vel_num, 3))
+        self.cmd_vel_idx = 0
+        self.n_envs = n_envs
+
+        for i in range(self.cmd_vel_num):
+            self.cmd_vel_normed_list[i, :] = np.array([np.cos(np.pi/6*i), np.sin(np.pi/6*i), 0.0])
+    
+    def _on_training_start(self):
+        for i in range(self.n_envs):
+            self.training_env.envs[i].env._cmd_base_vel_normed = self.cmd_vel_normed_list[self.cmd_vel_idx, :]
+        
+        if self.verbose > 1:
+            print(f'>>>>>>>>>> Initial cmd vel is: {np.array2string(self.cmd_vel_normed_list[self.cmd_vel_idx, :], precision=4, separator=",")}')
+    
+    def _on_step(self):
+        if self.n_calls % self.freq == 0:
+            self.cmd_vel_idx += 1
+            self.cmd_vel_idx %= self.cmd_vel_num
+
+            for i in range(self.n_envs):
+                self.training_env.envs[i].env._cmd_base_vel_normed = self.cmd_vel_normed_list[self.cmd_vel_idx, :]
+            
+            if self.verbose > 1:
+                print(f'>>>>>>>>>> Current cmd vel is: {np.array2string(self.cmd_vel_normed_list[self.cmd_vel_idx, :], precision=4, separator=",")}')
+
+        
 
 
 ################################################################
