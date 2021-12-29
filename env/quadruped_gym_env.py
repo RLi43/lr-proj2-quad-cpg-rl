@@ -2,7 +2,7 @@
 Author: Legged Robots
 LastEditors: Chengkun Li
 Date: 2021-11-30 22:27:51
-LastEditTime: 2021-12-23 01:16:59
+LastEditTime: 2021-12-28 20:49:13
 Description: This file implements the gym environment for a quadruped.
 FilePath: /lr-proj2-quad-cpg-rl/env/quadruped_gym_env.py
 '''
@@ -463,7 +463,7 @@ class QuadrupedGymEnv(gym.Env):
         ground_mu_k = mu_min+(1-mu_min)*np.random.random()
         self._ground_mu_k = ground_mu_k
         self._pybullet_client.changeDynamics(self.plane, -1, lateralFriction=ground_mu_k)
-        self.add_random_boxes(z_height=0.07*random.uniform(1, 1.2))
+        self.add_random_boxes(z_height=0.1*random.uniform(1, 1.2))
         self._pybullet_client.setGravity(0+random.uniform(-0.01, 0.01),\
            0+random.uniform(-0.01, 0.01), -9.8*random.uniform(1, 1.2))
         

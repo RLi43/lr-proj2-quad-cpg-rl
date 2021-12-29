@@ -2,7 +2,7 @@
 Author: Chengkun Li
 LastEditors: Chengkun Li
 Date: 2021-12-01 02:23:02
-LastEditTime: 2021-12-23 15:19:54
+LastEditTime: 2021-12-29 17:07:57
 Description: Modify here please
 FilePath: /lr-proj2-quad-cpg-rl/load_sb3.py
 '''
@@ -38,10 +38,10 @@ from utils.utils import plot_results
 from utils.file_utils import get_latest_model, load_all_results
 
 
-LEARNING_ALG = "PPO"
+LEARNING_ALG = "SAC"
 interm_dir = "./logs/intermediate_models/"
 # path to saved models, i.e. interm_dir + '111121133812'
-log_dir = interm_dir + '122321010925'
+log_dir = interm_dir + '122921155737'
 
 # initialize env configs (render at test time)
 # check ideal conditions, as well as robustness to UNSEEN noise during training
@@ -52,7 +52,10 @@ env_config['render'] = True
 env_config['record_video'] = False
 env_config['add_noise'] = False 
 env_config['test_env'] = False
-env_config['competition_env'] = False
+env_config['competition_env'] = True
+env_config['dy_rand'] = False # for training! only for validation!
+
+
 
 plot_monitor = True
 
@@ -86,7 +89,7 @@ episode_reward = 0
 # [TODO] initialize arrays to save data from simulation 
 #
 
-steps = 2000
+steps = 5000
 # Plot only one trail
 only_once = False
 base_linear = np.zeros([steps, 3])
@@ -106,6 +109,8 @@ start_i = 0
 distance = 0
 x, y = 0, 0
 x_prev, y_prev = 0, 0
+dist_per_trail = []
+
 for i in range(steps):
     action, _states = model.predict(obs,deterministic=False) # sample at test time? ([TODO]: test)
     # logging.info(type(_states))
@@ -161,6 +166,7 @@ for i in range(steps):
         logger.info('Total distance traveled: {}', distance)
         logger.info('COT = {}'.format(energy/distance))
         logger.info('Final base position: {}'.format(info[0]['base_pos']))
+        dist_per_trail.append(distance)
         episode_reward = 0
         energy = 0
         distance = 0
@@ -234,7 +240,9 @@ for i in range(4):
        label='Foot trajectory of {}'.format(leg_name[i]), s=3)
 ax.legend()
 
-
+fig, ax = plt.subplots()
+ax.bar(np.arange(len(dist_per_trail)), dist_per_trail)
+ax.set(title='Distance per trail', xlabel='Trail')
 
 
 plt.show()
