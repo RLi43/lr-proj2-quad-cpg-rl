@@ -2,7 +2,7 @@
 Author: Chengkun Li
 LastEditors: Chengkun Li
 Date: 2021-12-01 02:23:02
-LastEditTime: 2021-12-29 17:07:57
+LastEditTime: 2021-12-30 01:36:36
 Description: Modify here please
 FilePath: /lr-proj2-quad-cpg-rl/load_sb3.py
 '''
@@ -41,7 +41,7 @@ from utils.file_utils import get_latest_model, load_all_results
 LEARNING_ALG = "SAC"
 interm_dir = "./logs/intermediate_models/"
 # path to saved models, i.e. interm_dir + '111121133812'
-log_dir = interm_dir + '122921155737'
+log_dir = interm_dir + '122921201817'
 
 # initialize env configs (render at test time)
 # check ideal conditions, as well as robustness to UNSEEN noise during training
@@ -90,7 +90,7 @@ episode_reward = 0
 #
 
 steps = 5000
-# Plot only one trail
+# Plot only one trial
 only_once = False
 base_linear = np.zeros([steps, 3])
 base_angular = np.zeros([steps, 3])
@@ -159,14 +159,15 @@ for i in range(steps):
       dx, dy = 0, 0
     x_prev, y_prev = x, y
     distance += np.sqrt(dx**2 + dy**2)
-
+    # logger.info('robot contact normal force: {}'.format(env.envs[0].env.robot.GetContactInfo()[2]))
     if dones:
         logger.info('episode_reward: {}'.format(episode_reward))
         logger.info('Total energy is {}'.format(energy))
         logger.info('Total distance traveled: {}', distance)
         logger.info('COT = {}'.format(energy/distance))
         logger.info('Final base position: {}'.format(info[0]['base_pos']))
-        dist_per_trail.append(distance)
+        dist_per_trail.append(info[0]['base_pos'][0])
+        logger.info('Current mean of end position: {}'.format(np.mean(dist_per_trail)))
         episode_reward = 0
         energy = 0
         distance = 0
