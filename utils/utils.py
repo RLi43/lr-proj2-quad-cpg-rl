@@ -5,7 +5,6 @@ import matplotlib.pyplot as plt
 from glob import glob
 import pandas
 import json
-from run_sb3 import NUM_ENVS
 
 #from stable_baselines.bench.monitor import load_results
 from stable_baselines3.common.monitor import load_results

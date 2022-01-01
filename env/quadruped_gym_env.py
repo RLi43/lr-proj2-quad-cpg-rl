@@ -177,7 +177,8 @@ class QuadrupedGymEnv(gym.Env):
                                           np.array([1.0]*12), 
                                           np.array([5.0]*12), 
                                           np.array([1.0]*4), 
-                                          np.array([1500.0]*4))) + OBSERVATION_EPS)
+                                          np.array([1500.0]*4), 
+                                          np.array([1.0, 1.0, 0.0]))) + OBSERVATION_EPS)
       observation_low = (np.concatenate((np.array([-5.0]*3), 
                                          np.array([-5.0]*3), 
                                          self._robot_config.LOWER_ANGLE_JOINT, 
@@ -187,7 +188,8 @@ class QuadrupedGymEnv(gym.Env):
                                          np.array([-1.0]*12), 
                                          np.array([-5.0]*12), 
                                          np.array([0.0]*4), 
-                                         np.array([0.0]*4))) - OBSERVATION_EPS)
+                                         np.array([0.0]*4), 
+                                         np.array([-1.0, -1.0, 0.0]))) - OBSERVATION_EPS)
     else:
       raise ValueError("observation space not defined or not intended")
 
@@ -229,7 +231,8 @@ class QuadrupedGymEnv(gym.Env):
                                           foot_p, 
                                           foot_v, 
                                           np.array(self.robot.GetContactInfo()[3]), 
-                                          np.array(self.robot.GetContactInfo()[2])))
+                                          np.array(self.robot.GetContactInfo()[2]), 
+                                          self._cmd_base_vel_normed))
 
     else:
       raise ValueError("observation space not defined or not intended")
@@ -346,7 +349,8 @@ class QuadrupedGymEnv(gym.Env):
     # reward = 0.06*rwd_linear_vel + 0.04*rwd_base_motion + 0.04*rwd_base_level + 0.05*rwd_speed + 0.04*rwd_orient + 0.00001*rwd_energy  # PPO
     # reward = 0.05*rwd_linear_vel + 0.02*rwd_base_motion + 0.02*rwd_base_level + 0.05*rwd_speed + 0.02*rwd_orient + 0.0001*rwd_energy  # PPO
     # reward = 0.05*rwd_linear_vel + 0.02*rwd_base_motion + 0.03*rwd_base_level + 0.05*rwd_speed + 0.02*rwd_orient + 0.0001*rwd_energy  # PPO
-    reward = 0.05*rwd_linear_vel + 0.02*rwd_base_motion + 0.03*rwd_base_level + 0.05*rwd_speed + 0.02*rwd_orient + 0.01*rwd_ft_hgt + 0.0001*rwd_energy  # PPO
+    # reward = 0.05*rwd_linear_vel + 0.02*rwd_base_motion + 0.03*rwd_base_level + 0.05*rwd_speed + 0.02*rwd_orient + 0.01*rwd_ft_hgt + 0.0001*rwd_energy  # PPO --> 2 attempts
+    reward = 0.07*rwd_linear_vel + 0.02*rwd_base_motion + 0.03*rwd_base_level + 0.05*rwd_speed + 0.02*rwd_orient + 0.005*rwd_ft_hgt + 0.0001*rwd_energy  # PPO
 
     return reward
 
