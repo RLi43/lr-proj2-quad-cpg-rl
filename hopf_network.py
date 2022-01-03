@@ -29,11 +29,10 @@ class HopfNetwork():
   """
   def __init__(self,
                 mu=1**2,                # converge to sqrt(mu)
-                omega = 10*2*np.pi,
                 # omega_swing=10*2*np.pi,  # TODO Swing Frequency
                 # omega_stance=10*2*np.pi, # TODO Stance Frequency
                 gait="WALK",            # change depending on desired gait
-                coupling_strength=1,    # coefficient to multiply coupling matrix
+                # coupling_strength=1,    # coefficient to multiply coupling matrix
                 couple=True,            # should couple
                 time_step=0.001,        # time step 
                 ground_clearance=0.05,  # foot swing height 
@@ -54,13 +53,12 @@ class HopfNetwork():
 
     # save parameters 
     self._mu = mu
-    self._omega = omega
     # self._omega_swing = omega_swing
     # self._omega_stance = omega_stance  
     self._couple = couple
     self._dt = time_step
-    self._set_gait(gait)
-    self._coupling_strength = 0.25*min(self._omega_swing,self._omega_stance)/2 * np.ones((4,4))
+    self._set_gait(gait) # _omega_swing, _omega_stance, _des_step_len, _ground_clearance, _ground_penetration
+    self._coupling_strength = min(self._omega_swing,self._omega_stance)/3 * np.ones((4,4))
 
     # set oscillator initial conditions  
     self.X[0,:] = np.random.rand(4) * .1 #
@@ -86,15 +84,15 @@ class HopfNetwork():
        (-0.5, 0, 0, -0.5),
        (0, 0.5, 0.5, 0))
     )
-    
+
     # 0.5      0.0
     # 0.25     0.75
-    self.PHI_walk_lateral = 2*np.pi*np.array(
+    self.PHI_walk = 2*np.pi*np.array(
       ((0, 0.5, 0.75, 0.25),
        (-0.5, 0, 0.25, -0.25),
        (0.25, -0.25, 0, 0.5),
        (-0.25, 0.25, 0.5, 0))
-    )
+    )    
     # 0.5      0.0
     # 0.75     0.25
     self.PHI_walk_diagonal = 2*np.pi*np.array(
@@ -103,7 +101,7 @@ class HopfNetwork():
        (-0.25, 0.25, 0, 0.5),
        (0.25, -0.25, 0.5, 0))
     )
-    
+
     self.PHI_bound = np.array(
       ((0, 0, np.pi, np.pi),
        (0, 0, np.pi, np.pi),
@@ -111,16 +109,46 @@ class HopfNetwork():
        (-np.pi, -np.pi,0, 0))
     )
 
-    # 0.5      0.5
-    # 0.0      0.0
+    canter_param = 0
+    # 0.75+    0.5
+    # 0.5      0.25-
+    self.PHI_canter_transverse = 2*np.pi*np.array((
+      (0, 0.25+canter_param,0.75-canter_param,0),
+      (0.75-canter_param, 0, 0.5-2*canter_param, 0.75-canter_param),
+      (0.25+canter_param, 0.5+2*canter_param, 0, 0.25+canter_param),
+      (0, 0.25+canter_param,0.75-canter_param,0)
+    ))
+    # 0.5      0.75+
+    # 0.5      0.25-
+    self.PHI_canter_rotatorary = 2*np.pi*np.array((
+      (0, 0.75-canter_param, 0.5-2*canter_param, 0.75-canter_param),
+      (0.25+canter_param, 0, 0.75-canter_param,0),
+      (0.5+2*canter_param, 0.25+canter_param, 0, 0.25+canter_param),
+      (0.25+canter_param, 0, 0.75-canter_param,0)
+    ))
+
     gallop_param1 = 0.05
+    gallop_param2 = 0.25 # suspension interval = 1 - 2*gp2 or 2x (1 - 2*gp2)/2
     if gait == "BOUND":
       gallop_param1 = 0
-    self.PHI_gallop = 2*np.pi*np.array(
-     ((0, 1-gallop_param1, 0.5, 0.5),
-      (gallop_param1, 0, 0.5+gallop_param1, gallop_param1+0.5),
-      (0.5, 0.5-gallop_param1, 0, 0),
-      (0.5, 0.5-gallop_param1, 0, 0))
+      gallop_param2 = 0.25
+    elif gait == "GALLOP_TRANS" or gait == "GALLOP":
+      gallop_param2 = 0.3
+    # p      p+
+    # 0      0+
+    self.PHI_gallop_transverse = 2*np.pi*np.array(
+     ((0, -gallop_param1, -gallop_param2, -gallop_param2-gallop_param1),
+      (gallop_param1, 0, gallop_param1-gallop_param2, -gallop_param2),
+      (gallop_param2, gallop_param2-gallop_param1, 0, -gallop_param1),
+      (gallop_param2+gallop_param1, gallop_param2, gallop_param1, 0))
+    )
+    # 2p      2p+
+    # 0+      0
+    self.PHI_gallop_rotatorary = 2*np.pi*np.array(
+     ((0, -gallop_param1, -2*gallop_param2-gallop_param1, -2*gallop_param2),
+      (gallop_param1, 0, -2*gallop_param2, -2*gallop_param2+gallop_param1),
+      (2*gallop_param2+gallop_param1, 2*gallop_param2, 0, gallop_param1),
+      (2*gallop_param2, 2*gallop_param2-gallop_param1, -gallop_param1, 0))
     )
 
     # 0.0      0.5
@@ -134,19 +162,47 @@ class HopfNetwork():
 
     self.PHI_pronk = np.zeros((4,4))
 
-    if gait == "TROT" or gait == "TROT_RUN":
+    global foot_y
+    if gait == "WALK":
+      print('WALK')
+      self.PHI = self.PHI_walk
+      # Normal walk: 3/2-leg support: 1/2 < duty < 3/4 => stance/swing in (1/3,1)
+      # Very slow walk: 4-leg support: duty > 3/4
+      self._omega_swing = 5.0*2*np.pi
+      self._omega_stance = 1.0*2*np.pi
+      self._des_step_len = 0.04
+      self._ground_penetration = 0.01
+      self._ground_clearance = 0.05
+    elif gait == "AMBLE":
+      print(gait) 
+      self.PHI = self.PHI_walk
+      # fast amble: 2/1-leg support: 1/4 < duty < 1/2 => stance/swing in (1,3)
+      self._omega_swing = 15.0*2*np.pi
+      self._omega_stance = 30.0*2*np.pi
+      self._des_step_len = 0.05
+      self._ground_penetration = 0.01
+      self._ground_clearance = 0.05
+    elif gait == "WALK_DIAG":
+      print('WALK_DIAG')
+      self.PHI = self.PHI_walk_diagonal
+      self._omega_swing = 15.0*2*np.pi
+      self._omega_stance = 30.0*2*np.pi
+      self._des_step_len = 0.04
+      self._ground_penetration = 0.01
+      self._ground_clearance = 0.05
+    elif gait == "TROT" or gait == "TROT_RUN":
       print('TROT_RUN')
       self.PHI = self.PHI_trot
-      # running trot
-      self._omega_swing = 10.0*2*np.pi
-      self._omega_stance = 50.0*2*np.pi
-      self._des_step_len = 0.05
-      self._ground_penetration = 0.007
-      self._ground_clearance = 0.07
+      # running trot: with suspension : duty < 1/2 => stance/swing > 1
+      self._omega_swing = 15.0*2*np.pi
+      self._omega_stance = 30.0*2*np.pi
+      self._des_step_len = 0.04
+      self._ground_penetration = 0.01
+      self._ground_clearance = 0.05
     elif gait == "TROT_WALK":
       print('TROT_WALK')
       self.PHI = self.PHI_trot
-      # walking trot
+      # walking trot: without suspension : duty > 1/2 => stance/swing < 1
       self._omega_swing = 2.2*2*np.pi
       self._omega_stance = 2.0*2*np.pi
       self._des_step_len = 0.04
@@ -156,37 +212,60 @@ class HopfNetwork():
       print('PACE')
       self.PHI = self.PHI_pace
       # walking-to-running pace
-      # abnormal gait:
-      # the gravity point is shifting
-      global foot_y
-      foot_y = FOOT_Y * 0.4
-      self._omega_swing = 6.0*2*np.pi
-      self._omega_stance = 8.0*2*np.pi
-      self._des_step_len = 0.03
+      # abnormal gait: the gravity point is shifting
+      foot_y = FOOT_Y * 0.4 # keep balance
+      # without suspension : duty >~ 1/2 => stance/swing ~< 1
+      self._omega_swing = 22.0*2*np.pi
+      self._omega_stance = 20.0*2*np.pi
+      self._des_step_len = 0.04
       self._ground_penetration = 0.001
       self._ground_clearance = 0.05
-    elif gait == "WALK":
-      print('WALK')
-      self.PHI = self.PHI_walk_lateral
+    elif gait == "PACE_FLY":
+      print('PACE_FLY') #[TODO]
+      self.PHI = self.PHI_pace      
+      # with suspension : duty < 1/2 => stance/swing > 1
+      foot_y = FOOT_Y * 0.6
       self._omega_swing = 7.0*2*np.pi
-      self._omega_stance = 2.0*2*np.pi
+      self._omega_stance = 20.0*2*np.pi
+      self._des_step_len = 0.05
+      self._ground_penetration = 0.01
+      self._ground_clearance = 0.06
+    elif gait == "CANTER_TRANS" or gait == "CANTER":
+      print("CANTER_TRANS") #[TODO]
+      self.PHI = self.PHI_canter_transverse
+      # duty < 1/4 => stance/swing > 3
+      self._omega_swing = 7*2*np.pi
+      self._omega_stance = 23.0*2*np.pi
       self._des_step_len = 0.04
       self._ground_penetration = 0.01
       self._ground_clearance = 0.05
-    elif gait == "WALK_DIAG":
-      print('WALK_DIAG')
-      self.PHI = self.PHI_walk_diagonal
-      self._omega_swing = 7.0*2*np.pi
-      self._omega_stance = 2.0*2*np.pi
-      self._des_step_len = 0.04
-      self._ground_penetration = 0.01
-      self._ground_clearance = 0.05
-    elif gait == "GALLOP" or gait == "BOUND":
-      print(gait)
-      self.PHI = self.PHI_gallop
+    elif gait == "CANTER_ROTA":
+      print("CANTER_ROTA") #[TODO]
+      self.PHI = self.PHI_canter_rotatorary
       # running
       self._robot_height *= 0.9
-      self._omega_swing = 11.50*2*np.pi
+      self._omega_swing = 11*2*np.pi
+      self._omega_stance = 30.0*2*np.pi
+      self._des_step_len = 0.04
+      self._ground_penetration = 0.001
+      self._ground_clearance = 0.05
+    elif gait == "GALLOP_ROTA" or gait == "BOUND":
+      print(gait)
+      self.PHI = self.PHI_gallop_rotatorary
+      # running
+      self._robot_height *= 0.8
+      foot_y = FOOT_Y * 1.5
+      self._omega_swing = 8*2*np.pi
+      self._omega_stance = 35.0*2*np.pi
+      self._des_step_len = 0.05
+      self._ground_penetration = 0.02
+      self._ground_clearance = 0.07
+    elif gait == "GALLOP_TRANS" or gait == "GALLOP":
+      print(gait)
+      self.PHI = self.PHI_gallop_transverse
+      # running
+      self._robot_height *= 0.9
+      self._omega_swing = 8*2*np.pi
       self._omega_stance = 35.0*2*np.pi
       self._des_step_len = 0.05
       self._ground_penetration = 0.01
@@ -239,7 +318,7 @@ class HopfNetwork():
     # bookkeeping - save copies of current CPG states 
     X = self.X.copy()
     self.X_dot = np.zeros((2,4))
-    alpha = 1.0 
+    alpha = 5.0 
     F = 10
     force_threshold = 10 # 120N/4
 
@@ -248,7 +327,7 @@ class HopfNetwork():
       # get r_i, theta_i from X
       r, theta = X[0,i], X[1,i] # [tODO]
       # compute r_dot (Equation 6)
-      r_dot = alpha * (self._mu - r**2) #* r # [tODO]
+      r_dot = alpha * (self._mu - r**2) * r # [tODO]
       # determine whether oscillator i is in swing or stance phase to set natural frequency omega_swing or omega_stance (see Section 3)
       # swinging
       if theta < np.pi:
@@ -319,10 +398,7 @@ if __name__ == "__main__":
   USE_FEEDBACK = False
   ON_RACK = False
   gait_direction = 0 # forward
-  #  GALLOP, PRONK -- adjust the omegas
-  gait_name = "BOUND"
-  step_length = 0.06
-  base_omega = 10.0*2*np.pi
+  gait_name = "AMBLE"
   simulation_time = 6.0
 
   if not ADD_CARTESIAN_PD and not ADD_JOINT_PD:
@@ -347,8 +423,7 @@ if __name__ == "__main__":
 
 
   # initialize Hopf Network, supply gait
-  cpg = HopfNetwork(time_step=TIME_STEP, gait=gait_name, omega=base_omega, des_step_len=step_length,
-                coupling_strength=0.25*base_omega,
+  cpg = HopfNetwork(time_step=TIME_STEP, gait=gait_name,
                 ground_clearance=0.05,  # foot swing height 
                 ground_penetration=0.01)# foot stance penetration into ground )
 
