@@ -2,7 +2,7 @@
 Author: Chengkun Li
 LastEditors: Chengkun Li
 Date: 2021-12-01 02:23:02
-LastEditTime: 2021-12-30 01:36:36
+LastEditTime: 2022-01-03 22:34:32
 Description: Modify here please
 FilePath: /lr-proj2-quad-cpg-rl/load_sb3.py
 '''
@@ -38,10 +38,10 @@ from utils.utils import plot_results
 from utils.file_utils import get_latest_model, load_all_results
 
 
-LEARNING_ALG = "SAC"
+LEARNING_ALG = "PPO"
 interm_dir = "./logs/intermediate_models/"
 # path to saved models, i.e. interm_dir + '111121133812'
-log_dir = interm_dir + '122921201817'
+log_dir = interm_dir + '010322222537'
 
 # initialize env configs (render at test time)
 # check ideal conditions, as well as robustness to UNSEEN noise during training
