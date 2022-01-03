@@ -1,7 +1,7 @@
 """This file implements the gym environment for a quadruped. """
 import os, inspect
 
-from numpy import linalg
+from numpy import linalg, sqrt
 # so we can import files
 currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
 os.sys.path.insert(0, currentdir)
@@ -488,13 +488,13 @@ class QuadrupedGymEnv(gym.Env):
     linear_vel = self.robot.GetBaseLinearVelocity()
     if old_id is None:
       return self._pybullet_client.addUserDebugText(
-        text = F"x-y vel:{np.linalg.norm(linear_vel[:1]):.2f},[{linear_vel[0]:.3f},{linear_vel[1]:.3f},{linear_vel[2]:.3f}]",
+        text = F"x-y vel:{np.linalg.norm(linear_vel[:2]):.2f},[{linear_vel[0]:.3f},{linear_vel[1]:.3f},{linear_vel[2]:.3f}]",
         textPosition = self.robot.GetBasePosition() + np.array([0,0,0.5]),
         textSize = 0.5,
         textColorRGB = [0, 0, 1])
     else:
       return self._pybullet_client.addUserDebugText(
-        text = F"x-y vel:{np.linalg.norm(linear_vel[:1]):.2f},[{linear_vel[0]:.3f},{linear_vel[1]:.3f},{linear_vel[2]:.3f}]",
+        text = F"x-y vel:{np.linalg.norm(linear_vel[:2]):.2f},[{linear_vel[0]:.3f},{linear_vel[1]:.3f},{linear_vel[2]:.3f}]",
         textPosition = self.robot.GetBasePosition() + np.array([-0.3,-0.3,0.3]),
         textSize = 2.0,
         textColorRGB = [0, 0, 1],
