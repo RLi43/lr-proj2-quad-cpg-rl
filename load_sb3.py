@@ -2,7 +2,7 @@
 Author: Chengkun Li
 LastEditors: Chengkun Li
 Date: 2021-12-01 02:23:02
-LastEditTime: 2022-01-04 19:17:16
+LastEditTime: 2022-01-05 00:43:50
 Description: Modify here please
 FilePath: /lr-proj2-quad-cpg-rl/load_sb3.py
 '''
@@ -38,10 +38,10 @@ from utils.utils import plot_results
 from utils.file_utils import get_latest_model, load_all_results
 
 
-LEARNING_ALG = "PPO"
+LEARNING_ALG = "SAC"
 interm_dir = "./logs/intermediate_models/"
 # path to saved models, i.e. interm_dir + '111121133812'
-log_dir = interm_dir + '010422181555'
+log_dir = interm_dir + '122921193037'
 
 # initialize env configs (render at test time)
 # check ideal conditions, as well as robustness to UNSEEN noise during training
@@ -57,7 +57,7 @@ env_config['dy_rand'] = False # for training! only for validation!
 
 
 
-plot_monitor = False
+plot_monitor = True
 
 
 # get latest model and normalization stats, and plot 
@@ -91,7 +91,7 @@ episode_reward = 0
 
 steps = 5000
 # Plot only one trial
-only_once = False
+only_once = True
 base_linear = np.zeros([steps, 3])
 base_angular = np.zeros([steps, 3])
 motor_angles = np.zeros([steps, 4, 3])
@@ -227,9 +227,9 @@ if only_once:
   fig, ax = plt.subplots()
   ax.plot(base_pos[:steps, 0], base_pos[:steps, 1])
   ax.set(title='Base position of Legged robot')
-  ax.scatter(base_pos[0, 0], base_pos[0, 1], s=90, c='r', marker='X', label='Start Point')
+  ax.scatter(base_pos[0, 0], base_pos[0, 1], s=120, c='r', marker='X', label='Start Point')
   logger.info((base_pos[0, 0], base_pos[0, 1]))
-  ax.scatter(base_pos[steps-1, 0], base_pos[steps-1, 1], s=90, c='g', marker='*', label='End Point')
+  ax.scatter(base_pos[steps-1, 0], base_pos[steps-1, 1], s=120, c='g', marker='*', label='End Point')
   ax.legend()
   logger.info((base_pos[steps-1, 0], base_pos[steps-1, 1]))
 
@@ -246,6 +246,10 @@ ax.legend()
 fig, ax = plt.subplots()
 ax.bar(np.arange(len(dist_per_trail)), dist_per_trail)
 ax.set(title='Distance per trail', xlabel='Trail')
+
+# Calculate duty cycyle
+for i in range(4):
+  logger.info('Duty cycle of {} is {}'.format(leg_name[i], np.count_nonzero(contact_info[:steps, i])/(steps)))
 
 
 plt.show()
