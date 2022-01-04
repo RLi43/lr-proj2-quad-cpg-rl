@@ -3,6 +3,7 @@ Run stable baselines 3 on quadruped env
 Check the documentation! https://stable-baselines3.readthedocs.io/en/master/
 """
 import os
+from typing import Callable
 from datetime import datetime
 # stable baselines 3
 from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize
@@ -59,7 +60,28 @@ if LOAD_NN:
 policy_kwargs = dict(net_arch=[256,256])
 # What are these hyperparameters? Check here: https://stable-baselines3.readthedocs.io/en/master/modules/ppo.html
 n_steps = 4096 
-learning_rate = lambda f: 1e-4 
+
+def linear_schedule(initial_value: float) -> Callable[[float], float]:
+    """
+    Linear learning rate schedule.
+
+    :param initial_value: Initial learning rate.
+    :return: schedule that computes
+      current learning rate depending on remaining progress
+    """
+    def func(progress_remaining: float) -> float:
+        """
+        Progress will decrease from 1 (beginning) to 0.
+
+        :param progress_remaining:
+        :return: current learning rate
+        """
+        return progress_remaining * initial_value
+
+    return func
+
+learning_rate = linear_schedule(1e-4) # lambda f: 1e-4 
+
 ppo_config = {  "gamma":0.99, 
                 "n_steps": int(n_steps/NUM_ENVS), 
                 "ent_coef":0.0, 
