@@ -2,7 +2,7 @@
 Author: Legged Robots
 LastEditors: Chengkun Li
 Date: 2021-11-30 22:27:51
-LastEditTime: 2021-12-23 01:16:59
+LastEditTime: 2021-12-29 20:16:56
 Description: This file implements the gym environment for a quadruped.
 FilePath: /lr-proj2-quad-cpg-rl/env/quadruped_gym_env.py
 '''
@@ -185,7 +185,8 @@ class QuadrupedGymEnv(gym.Env):
         np.array([1.0] * 4),
         np.array([1.0] * 12),
         np.array([5.0] * 12),
-        np.array([1.0] * 4)
+        np.array([1.0] * 4),
+        np.array([400.0] * 4),
       )) + OBSERVATION_EPS)
       observation_low = (np.concatenate((
         np.array([-19.] * 3),
@@ -196,7 +197,8 @@ class QuadrupedGymEnv(gym.Env):
         np.array([-1.0] * 4),
         np.array([-1.0] * 12),
         np.array([-5.0] * 12),
-        np.array([-1.0] * 4)
+        np.array([-1.0] * 4),
+        np.array([-1.0] * 4),
       )) -  OBSERVATION_EPS)
       logger.info("Observational space dimension: {}".format(observation_high.shape))
     else:
@@ -253,7 +255,8 @@ class QuadrupedGymEnv(gym.Env):
         self.robot.GetBaseOrientation(), # 4x1
         foot_pos, # 12x1
         foot_vel, # 12x1
-        np.array(self.robot.GetContactInfo()[3]) # 4x1
+        np.array(self.robot.GetContactInfo()[3]), # 4x1,
+        np.array(self.robot.GetContactInfo()[2]), # 4x1
       ))
       # logger.debug("The length of observation space: {}", len(self._observation))
 
@@ -463,7 +466,7 @@ class QuadrupedGymEnv(gym.Env):
         ground_mu_k = mu_min+(1-mu_min)*np.random.random()
         self._ground_mu_k = ground_mu_k
         self._pybullet_client.changeDynamics(self.plane, -1, lateralFriction=ground_mu_k)
-        self.add_random_boxes(z_height=0.07*random.uniform(1, 1.2))
+        self.add_random_boxes(z_height=0.1*random.uniform(1, 1.2))
         self._pybullet_client.setGravity(0+random.uniform(-0.01, 0.01),\
            0+random.uniform(-0.01, 0.01), -9.8*random.uniform(1, 1.2))
         
