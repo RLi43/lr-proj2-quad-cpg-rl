@@ -29,7 +29,7 @@ args = parser.parse_args()
 
 LEARNING_ALG = args.policy # "PPO" or "SAC"
 LOAD_NN = False # if you want to initialize training with a previous model 
-NUM_ENVS = 4    # how many pybullet environments to create for data collection
+NUM_ENVS = args.num_env    # how many pybullet environments to create for data collection
 USE_GPU = True # make sure to install all necessary drivers 
 
 # after implementing, you will want to test how well the agent learns with your MDP: 
