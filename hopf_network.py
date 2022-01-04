@@ -120,7 +120,7 @@ class HopfNetwork():
     ))
     # 0.5      0.75+
     # 0.5      0.25-
-    self.PHI_canter_rotatorary = 2*np.pi*np.array((
+    self.PHI_canter_rotatory = 2*np.pi*np.array((
       (0, 0.75-canter_param, 0.5-2*canter_param, 0.75-canter_param),
       (0.25+canter_param, 0, 0.75-canter_param,0),
       (0.5+2*canter_param, 0.25+canter_param, 0, 0.25+canter_param),
@@ -128,12 +128,12 @@ class HopfNetwork():
     ))
 
     gallop_param1 = 0.05
-    gallop_param2 = 0.25 # suspension interval = 1 - 2*gp2 or 2x (1 - 2*gp2)/2
+    gallop_param2 = 0.25 # suspension interval = 1 - (gp2+gp1) or 2x (1 - 2*gp2+gp1)/2
     if gait == "BOUND":
       gallop_param1 = 0
       gallop_param2 = 0.25
     elif gait == "GALLOP_TRANS" or gait == "GALLOP":
-      gallop_param2 = 0.3
+      gallop_param2 = 0.4
     # p      p+
     # 0      0+
     self.PHI_gallop_transverse = 2*np.pi*np.array(
@@ -144,7 +144,7 @@ class HopfNetwork():
     )
     # 2p      2p+
     # 0+      0
-    self.PHI_gallop_rotatorary = 2*np.pi*np.array(
+    self.PHI_gallop_rotatory = 2*np.pi*np.array(
      ((0, -gallop_param1, -2*gallop_param2-gallop_param1, -2*gallop_param2),
       (gallop_param1, 0, -2*gallop_param2, -2*gallop_param2+gallop_param1),
       (2*gallop_param2+gallop_param1, 2*gallop_param2, 0, gallop_param1),
@@ -177,16 +177,16 @@ class HopfNetwork():
       print(gait) 
       self.PHI = self.PHI_walk
       # fast amble: 2/1-leg support: 1/4 < duty < 1/2 => stance/swing in (1,3)
-      self._omega_swing = 15.0*2*np.pi
-      self._omega_stance = 30.0*2*np.pi
+      self._omega_swing = 10.0*2*np.pi
+      self._omega_stance = 20.0*2*np.pi
       self._des_step_len = 0.05
       self._ground_penetration = 0.01
       self._ground_clearance = 0.05
     elif gait == "WALK_DIAG":
       print('WALK_DIAG')
       self.PHI = self.PHI_walk_diagonal
-      self._omega_swing = 15.0*2*np.pi
-      self._omega_stance = 30.0*2*np.pi
+      self._omega_swing = 10.0*2*np.pi
+      self._omega_stance = 15.0*2*np.pi
       self._des_step_len = 0.04
       self._ground_penetration = 0.01
       self._ground_clearance = 0.05
@@ -231,7 +231,7 @@ class HopfNetwork():
       self._ground_penetration = 0.01
       self._ground_clearance = 0.06
     elif gait == "CANTER_TRANS" or gait == "CANTER":
-      print("CANTER_TRANS") #[TODO]
+      print("CANTER_TRANS") 
       self.PHI = self.PHI_canter_transverse
       # duty < 1/4 => stance/swing > 3
       self._omega_swing = 7*2*np.pi
@@ -240,8 +240,8 @@ class HopfNetwork():
       self._ground_penetration = 0.01
       self._ground_clearance = 0.05
     elif gait == "CANTER_ROTA":
-      print("CANTER_ROTA") #[TODO]
-      self.PHI = self.PHI_canter_rotatorary
+      print("CANTER_ROTA") 
+      self.PHI = self.PHI_canter_rotatory
       # running
       self._robot_height *= 0.9
       self._omega_swing = 11*2*np.pi
@@ -251,7 +251,7 @@ class HopfNetwork():
       self._ground_clearance = 0.05
     elif gait == "GALLOP_ROTA" or gait == "BOUND":
       print(gait)
-      self.PHI = self.PHI_gallop_rotatorary
+      self.PHI = self.PHI_gallop_rotatory
       # running
       self._robot_height *= 0.8
       foot_y = FOOT_Y * 1.5
@@ -398,8 +398,8 @@ if __name__ == "__main__":
   USE_FEEDBACK = False
   ON_RACK = False
   gait_direction = 0 # forward
-  gait_name = "AMBLE"
-  simulation_time = 6.0
+  gait_name = "WALK"
+  simulation_time = 4.0
 
   if not ADD_CARTESIAN_PD and not ADD_JOINT_PD:
     raise("At least one PD needed")
@@ -417,7 +417,7 @@ if __name__ == "__main__":
                       action_repeat=1,
                       motor_control_mode="PD",
                       add_noise=False,    # start in ideal conditions
-                      # record_video=True
+                      record_video=True
                       )
   # env.add_random_boxes()
 
@@ -446,6 +446,7 @@ if __name__ == "__main__":
   enery_cost = 0.0
   orientation_history = np.zeros((TEST_STEPS, 3))
   contact_history = np.zeros((TEST_STEPS, 4))
+  speed_history = np.zeros((TEST_STEPS, 3))
 
   ############## Sample Gains
   # joint PD gains
@@ -454,11 +455,6 @@ if __name__ == "__main__":
   # Cartesian PD gains
   kpCartesian = np.diag([2500]*3)
   kdCartesian = np.diag([40]*3)
-
-  # kp = kp*1
-  # kd = kd*1
-  # kpCartesian = kpCartesian*1.8
-  # kdCartesian = kdCartesian*0.8
 
   for j in range(TEST_STEPS):
     starter = time.time()
@@ -532,12 +528,16 @@ if __name__ == "__main__":
       history_phase_change.append(j)
     enery_cost += (q_update - q_last) * action
 
+    linear_vel = env.robot.GetBaseLinearVelocity()
+    speed_history[j, :] = linear_vel
     # loop_time = time.time() - starter
     # if loop_time < TIME_STEP:
     #   print("sleep", TIME_STEP - loop_time)
     #   time.sleep(TIME_STEP - loop_time)
 
-
+  cur_position = env.robot.GetBasePosition()
+  distance_traveled = np.linalg.norm(cur_position)
+  env.close()
 
 
   ##################################################### 
@@ -546,11 +546,11 @@ if __name__ == "__main__":
   print(enery_cost)
   enery_cost = sum(enery_cost)
   print("Energy Cost:", enery_cost)
-  cur_position = env.robot.GetBasePosition()
-  distance_traveled = np.linalg.norm(cur_position)
   print("Distance Traveled:", distance_traveled)
   print("Cost of Transport:", enery_cost/distance_traveled)
-  print("avarage abs(pitch):", np.mean(abs(orientation_history[:,1])))
+  print("average abs(pitch):", np.mean(abs(orientation_history[:,1])))
+  print("orientation variance:", np.var(orientation_history))
+  print("average x-y speed", np.mean(np.linalg.norm(speed_history[:, :2], axis=1)))
 
   # fig = plt.figure()
   # plt.plot(t, action_history)
@@ -559,14 +559,14 @@ if __name__ == "__main__":
   leg_names = ["FR", "FL", "RR", "RL"]
   scales = [1, np.pi, 10, 100]
   for i in range(4):
-    plt.subplot(5,1,1+i)
+    plt.subplot(4,1,1+i)
     plt.title(leg_names[i])
     for j in range(4):
       plt.plot(t, cpg_history[:,j,i]/scales[j])
-    plt.plot(t, contact_history[:, i])
-    plt.legend(["r","theta","dr","dtheta","contact"])
-  plt.subplot(5,1,5)
-  plt.plot(t, orientation_history)
+    #plt.plot(t, contact_history[:, i])
+    plt.legend(["r","theta","dr","dtheta"])#,"contact"])
+  #plt.subplot(5,1,5)
+  #plt.plot(t, orientation_history)
   plt.legend(["roll","pitch","yaw"])
 
   fig = plt.figure()
@@ -598,12 +598,23 @@ if __name__ == "__main__":
   plt.plot(start_of_a_cycle, duty_factors)
   plt.subplot(2,1,2)
   plt.title("Phase Durations")
-  plt.plot(start_of_a_cycle, history_duration[:, 0])
-  plt.plot(start_of_a_cycle, history_duration[:, 1])
+  plt.plot(start_of_a_cycle, history_duration[:, 0]*TIME_STEP)
+  plt.plot(start_of_a_cycle, history_duration[:, 1]*TIME_STEP)
   plt.legend(["Swing Phase Duration", "Stance Phase Duration"])
 
-  plt.show()
+  fig = plt.figure()
+  plt.subplot(2,1,1)
+  plt.plot(t, speed_history)
+  plt.grid()
+  plt.title("linear speed")
+  plt.legend(["x", "y", "z"])
+  plt.subplot(2,1,2)
+  plt.title("x-y speed")
+  plt.plot(t, np.linalg.norm(speed_history[:, :2], axis=1))
+  plt.grid()
 
-  # plt.plot(action_history[:, 0], label = 'action FR q0')
-  # plt.plot(action_history[:, 3], label = 'action FL q0')
-  # plt.show()
+  print("duty factor", duty_factors[-1])
+  print("swing duration", history_duration[-1, 0]*TIME_STEP)
+  print("stance duration", history_duration[-1, 1]*TIME_STEP)
+
+  plt.show()

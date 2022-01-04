@@ -452,8 +452,7 @@ class QuadrupedGymEnv(gym.Env):
       output_video_filename = self.videoDirectory + '/' + datetime.datetime.now().strftime("vid-%Y-%m-%d-%H-%M-%S-%f") +extra_filename+ ".MP4"
     else:
       output_video_filename = self.videoDirectory + '/' + datetime.datetime.now().strftime("vid-%Y-%m-%d-%H-%M-%S-%f") + ".MP4"
-    logID = self.startRecordingVideo(output_video_filename)
-    self.videoLogID = logID
+    self.startRecordingVideo(output_video_filename)
 
 
   def configure(self, args):
@@ -480,25 +479,25 @@ class QuadrupedGymEnv(gym.Env):
     distance = camInfo[10]
     yaw = camInfo[8]
     pitch = camInfo[9]
-    targetPos = [
-        0.95 * curTargetPos[0] + 0.05 * base_pos[0], 0.95 * curTargetPos[1] + 0.05 * base_pos[1],
-        curTargetPos[2]
-    ]
+    # targetPos = [
+    #     0.95 * curTargetPos[0] + 0.05 * base_pos[0], 0.95 * curTargetPos[1] + 0.05 * base_pos[1],
+    #     curTargetPos[2]
+    # ]
     self._pybullet_client.resetDebugVisualizerCamera(distance, yaw, pitch, base_pos)
-    linear_vel = self.robot.GetBaseLinearVelocity()
-    if old_id is None:
-      return self._pybullet_client.addUserDebugText(
-        text = F"x-y vel:{np.linalg.norm(linear_vel[:2]):.2f},[{linear_vel[0]:.3f},{linear_vel[1]:.3f},{linear_vel[2]:.3f}]",
-        textPosition = self.robot.GetBasePosition() + np.array([0,0,0.5]),
-        textSize = 0.5,
-        textColorRGB = [0, 0, 1])
-    else:
-      return self._pybullet_client.addUserDebugText(
-        text = F"x-y vel:{np.linalg.norm(linear_vel[:2]):.2f},[{linear_vel[0]:.3f},{linear_vel[1]:.3f},{linear_vel[2]:.3f}]",
-        textPosition = self.robot.GetBasePosition() + np.array([-0.3,-0.3,0.3]),
-        textSize = 2.0,
-        textColorRGB = [0, 0, 1],
-        replaceItemUniqueId = old_id)
+    # linear_vel = self.robot.GetBaseLinearVelocity()
+    # if old_id is None:
+    #   return self._pybullet_client.addUserDebugText(
+    #     text = F"x-y vel:{np.linalg.norm(linear_vel[:2]):.2f},[{linear_vel[0]:.3f},{linear_vel[1]:.3f},{linear_vel[2]:.3f}]",
+    #     textPosition = self.robot.GetBasePosition() + np.array([0,0,0.5]),
+    #     textSize = 0.5,
+    #     textColorRGB = [0, 0, 1])
+    # else:
+    #   return self._pybullet_client.addUserDebugText(
+    #     text = F"x-y vel:{np.linalg.norm(linear_vel[:2]):.2f},[{linear_vel[0]:.3f},{linear_vel[1]:.3f},{linear_vel[2]:.3f}]",
+    #     textPosition = self.robot.GetBasePosition() + np.array([-0.3,-0.3,0.3]),
+    #     textSize = 2.0,
+    #     textColorRGB = [0, 0, 1],
+    #     replaceItemUniqueId = old_id)
 
   def _configure_visualizer(self):
     """ Remove all visualizer borders, and zoom in """
