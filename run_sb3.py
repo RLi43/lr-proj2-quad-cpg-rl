@@ -23,6 +23,7 @@ parser.add_argument('--policy', type=str, default="PPO")
 parser.add_argument('--num_env', type=int, default=4)
 parser.add_argument('--timesteps', type=int, default=1000000)
 parser.add_argument('--dy_rand', dest='dy_rand', action='store_true')
+parser.add_argument('--jointpd', dest='jointpd', action='store_true')
 # parser.add_argument()
 args = parser.parse_args()
 
@@ -33,7 +34,7 @@ NUM_ENVS = args.num_env    # how many pybullet environments to create for data c
 USE_GPU = True # make sure to install all necessary drivers 
 
 # after implementing, you will want to test how well the agent learns with your MDP: 
-env_configs = {"motor_control_mode":"CARTESIAN_PD",
+env_configs = {"motor_control_mode": "CARTESIAN_PD" if not args.jointpd else "PD",
                "task_env": "LR_COURSE_TASK",
                "observation_space_mode": "LR_COURSE_OBS",
                "dy_rand": args.dy_rand,
