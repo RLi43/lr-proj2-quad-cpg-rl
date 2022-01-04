@@ -96,7 +96,11 @@ def linear_schedule(initial_value: float) -> Callable[[float], float]:
 
     return func
 
+<<<<<<< HEAD
 learning_rate = linear_schedule(args.lr) # lambda f: 1e-4 
+=======
+learning_rate = linear_schedule(1e-4) # lambda f: 1e-4 
+>>>>>>> de8bbefb3976d11ef5476d6ef47766c64cb64254
 
 ppo_config = {  "gamma":0.99, 
                 "n_steps": int(n_steps/NUM_ENVS), 
