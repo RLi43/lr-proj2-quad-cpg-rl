@@ -2,7 +2,7 @@
 Author: Chengkun Li
 LastEditors: Chengkun Li
 Date: 2021-12-01 02:23:02
-LastEditTime: 2022-01-05 00:43:50
+LastEditTime: 2022-01-05 20:09:10
 Description: Modify here please
 FilePath: /lr-proj2-quad-cpg-rl/load_sb3.py
 '''
@@ -38,10 +38,10 @@ from utils.utils import plot_results
 from utils.file_utils import get_latest_model, load_all_results
 
 
-LEARNING_ALG = "SAC"
+LEARNING_ALG = "PPO"
 interm_dir = "./logs/intermediate_models/"
 # path to saved models, i.e. interm_dir + '111121133812'
-log_dir = interm_dir + '122921193037'
+log_dir = interm_dir + '010322222537'
 
 # initialize env configs (render at test time)
 # check ideal conditions, as well as robustness to UNSEEN noise during training
@@ -52,12 +52,12 @@ env_config['render'] = True
 env_config['record_video'] = False
 env_config['add_noise'] = False 
 env_config['test_env'] = False
-env_config['competition_env'] = False
+env_config['competition_env'] = True
 env_config['dy_rand'] = False # for training! only for validation!
 
 
 
-plot_monitor = True
+plot_monitor = False
 
 
 # get latest model and normalization stats, and plot 
@@ -102,7 +102,7 @@ motor_angles = np.zeros([steps, 4, 3])
 motor_torques = np.zeros([steps, 4, 3])
 
 # for calculation of COT
-q_hist = 0
+q_hist = [0]*12
 energy = 0
 # start index for a test trail
 start_i = 0
@@ -114,7 +114,7 @@ dist_per_trail = []
 for i in range(steps):
     action, _states = model.predict(obs,deterministic=False) # sample at test time? ([TODO]: test)
     # logging.info(type(_states))
-
+    # logger.info(action)
     obs, rewards, dones, info = env.step(action)
     
     base_pos[i, :] = env.envs[0].env.robot.GetBasePosition()
@@ -149,7 +149,15 @@ for i in range(steps):
 
     # Calculate energy
     q = motor_angles[i, :, :].ravel()
-    energy += sum((q - q_hist) * motor_torques[i, :, :].ravel())
+    step_energy = sum((q - q_hist) * motor_torques[i, :, :].ravel())
+    # logger.debug("{}, {}, {}".format((q - q_hist),  motor_torques[i, :, :].ravel(), (q - q_hist) * motor_torques[i, :, :].ravel()))
+    energy += step_energy
+    if energy < 0:
+      # logger.warning('Energy is negative now!')
+      pass
+    if np.array_equal(q_hist, [0]*12):
+      logger.debug('q_hist is reset to 0')
+    # logger.info('Current dq: {}; current torque: {}; product: {}'.format(q - q_hist, motor_torques[i, :, :].ravel(), (q - q_hist) * motor_torques[i, :, :].ravel()))
     # logger.info('Current consumed energy: {}'.format(energy))
     q_hist = q
     x, y = base_pos[i, 0], base_pos[i, 1]
@@ -171,19 +179,14 @@ for i in range(steps):
         episode_reward = 0
         energy = 0
         distance = 0
+        q_hist = [0]*12
         
         
         if only_once:
           steps = i
           break
     
-    
-    
-    # [TODO] save data from current robot states for plots 
-    
 
-
-# [TODO] make plots:
 
 
 
@@ -244,12 +247,21 @@ ax.set_ylim([-30, 30])
 ax.legend()
 
 fig, ax = plt.subplots()
-ax.bar(np.arange(len(dist_per_trail)), dist_per_trail)
-ax.set(title='Distance per trail', xlabel='Trail')
+ax.bar(np.arange(1, len(dist_per_trail)+1), dist_per_trail)
+ax.set(title='Distance per trail', xlabel='Trail number')
 
 # Calculate duty cycyle
 for i in range(4):
   logger.info('Duty cycle of {} is {}'.format(leg_name[i], np.count_nonzero(contact_info[:steps, i])/(steps)))
 
-
+# Plot foot height
+fig, ax = plt.subplots(nrows=4, sharex=True)
+for i in range(4):
+  ax[i].plot(t, base_pos[:steps, 2] + foot_pos[:steps, i, 2], label='Foot height of {}'.format(leg_name[i]))
+  avg_height = np.mean(base_pos[:steps, 2] + foot_pos[:steps, i, 2])
+  ax[i].plot(t, np.ones([steps]) * avg_height, label='Average height is {}'.format(avg_height))
+  ax[i].set(title='Foot heights of {}'.format(leg_name[i]), xlabel='steps', ylabel='height')
+# ax.set_ylim([-30, 30])
+  ax[i].legend()
+plt.tight_layout()
 plt.show()
