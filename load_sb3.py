@@ -29,7 +29,7 @@ LEARNING_ALG = "PPO"
 # LEARNING_ALG = "SAC"
 interm_dir = "./logs/intermediate_models/"
 # path to saved models, i.e. interm_dir + '111121133812'
-log_dir = interm_dir + '010122140144'
+log_dir = interm_dir + '010422052235'
 
 # initialize env configs (render at test time)
 # check ideal conditions, as well as robustness to UNSEEN noise during training
@@ -95,7 +95,8 @@ for i in range(2000):
     Forces_n[i, :] = env.envs[0].env.robot.GetContactInfo()[2]
 
     if i == 500:
-      env.envs[0].env._cmd_base_vel_normed = np.array([np.cos(np.pi/6*2), np.sin(np.pi/6*2), 0.0])
+      # env.envs[0].env._cmd_base_vel_normed = np.array([np.cos(np.pi/6*2), np.sin(np.pi/6*2), 0.0])
+      env.envs[0].env._cmd_base_vel_normed = np.array([np.cos(np.pi/6*3), np.sin(np.pi/6*3), 0.0])
       print(f'>>>>>>>>>> Current cmd vel is: {np.array2string(env.envs[0].env._cmd_base_vel_normed, precision=4, separator=",")}')
     elif i == 1000:
       env.envs[0].env._cmd_base_vel_normed = np.array([np.cos(np.pi/6*0), np.sin(np.pi/6*0), 0.0])

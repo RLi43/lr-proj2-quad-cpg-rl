@@ -56,13 +56,15 @@ class CmdVelCallback(BaseCallback):
     def __init__(self, freq: int, n_envs: int, verbose=0):
         super(CmdVelCallback, self).__init__(verbose)
         self.freq = max(freq//n_envs, 1)
-        self.cmd_vel_num = 4
+        # self.cmd_vel_num = 4
+        self.cmd_vel_num = 2
         self.cmd_vel_normed_list = np.zeros((self.cmd_vel_num, 3))
         self.cmd_vel_idx = 0
         self.n_envs = n_envs
 
         for i in range(self.cmd_vel_num):
-            self.cmd_vel_normed_list[i, :] = np.array([np.cos(np.pi/6*i), np.sin(np.pi/6*i), 0.0])
+            # self.cmd_vel_normed_list[i, :] = np.array([np.cos(np.pi/6*i), np.sin(np.pi/6*i), 0.0])
+            self.cmd_vel_normed_list[i, :] = np.array([np.cos(np.pi/2*i), np.sin(np.pi/2*i), 0.0])
     
     def _on_training_start(self):
         for i in range(self.n_envs):

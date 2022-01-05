@@ -340,7 +340,11 @@ class QuadrupedGymEnv(gym.Env):
     # foot height could be smaller than -robot_height --> ground penetration
     foot_z[foot_z < 0] = 0
 
-    rwd_ft_hgt = 1 - np.exp(-2.0*np.dot(foot_z, 1 - foot_contact_bool))
+    num_contact = sum(1 - foot_contact_bool)
+    if num_contact == 0:
+      num_contact = 1
+
+    rwd_ft_hgt = 1 - np.exp(-2.0*np.dot(foot_z, 1 - foot_contact_bool)/num_contact)
 
     # reward = 0.05*rwd_linear_vel + 0.04*rwd_base_motion + 0.04*rwd_base_level + 0.05*rwd_cmd_speed + 0.05*rwd_orient + 0.00002*rwd_energy + 0.01  # SAC
     # reward = 0.05*rwd_linear_vel + 0.04*rwd_base_motion + 0.01*rwd_base_level + 0.05*rwd_cmd_speed + 0.05*rwd_orient + 0.00001*rwd_energy  # SAC
@@ -350,7 +354,9 @@ class QuadrupedGymEnv(gym.Env):
     # reward = 0.05*rwd_linear_vel + 0.02*rwd_base_motion + 0.02*rwd_base_level + 0.05*rwd_speed + 0.02*rwd_orient + 0.0001*rwd_energy  # PPO
     # reward = 0.05*rwd_linear_vel + 0.02*rwd_base_motion + 0.03*rwd_base_level + 0.05*rwd_speed + 0.02*rwd_orient + 0.0001*rwd_energy  # PPO
     # reward = 0.05*rwd_linear_vel + 0.02*rwd_base_motion + 0.03*rwd_base_level + 0.05*rwd_speed + 0.02*rwd_orient + 0.01*rwd_ft_hgt + 0.0001*rwd_energy  # PPO --> 2 attempts
-    reward = 0.07*rwd_linear_vel + 0.02*rwd_base_motion + 0.03*rwd_base_level + 0.05*rwd_speed + 0.02*rwd_orient + 0.005*rwd_ft_hgt + 0.0001*rwd_energy  # PPO
+    # reward = 0.07*rwd_linear_vel + 0.02*rwd_base_motion + 0.03*rwd_base_level + 0.05*rwd_speed + 0.02*rwd_orient + 0.005*rwd_ft_hgt + 0.0001*rwd_energy  # PPO
+    # reward = 0.1*rwd_linear_vel + 0.05*rwd_base_motion + 0.03*rwd_base_level + 0.05*rwd_speed + 0.02*rwd_orient + 0.005*rwd_ft_hgt + 0.0001*rwd_energy  # PPO
+    reward = 0.1*rwd_linear_vel + 0.05*rwd_base_motion + 0.03*rwd_base_level + 0.05*rwd_speed + 0.02*rwd_orient + 0.00001*rwd_energy  # PPO
 
     return reward
 

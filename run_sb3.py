@@ -45,7 +45,7 @@ SAVE_PATH = './logs/intermediate_models/'+ datetime.now().strftime("%m%d%y%H%M%S
 os.makedirs(SAVE_PATH, exist_ok=True)
 # checkpoint to save policy network periodically
 checkpoint_callback = CheckpointCallback(save_freq=max(30000//NUM_ENVS, 1), save_path=SAVE_PATH, name_prefix='rl_model', verbose=2)
-cmdvel_callback = CmdVelCallback(freq=500000, n_envs=NUM_ENVS, verbose=2)
+cmdvel_callback = CmdVelCallback(freq=1000000, n_envs=NUM_ENVS, verbose=2)
 
 # create Vectorized gym environment
 env = lambda: QuadrupedGymEnv(**env_configs)  
