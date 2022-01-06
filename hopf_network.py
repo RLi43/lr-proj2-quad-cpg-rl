@@ -20,6 +20,7 @@ from env.quadruped_gym_env import QuadrupedGymEnv
 
 FOOT_Y = 0.0838
 foot_y = FOOT_Y
+foot_x = 0
 
 class HopfNetwork():
   """ CPG network based on hopf polar equations mapped to foot positions in Cartesian space.  
@@ -61,7 +62,7 @@ class HopfNetwork():
     self._coupling_strength = min(self._omega_swing,self._omega_stance)/3 * np.ones((4,4))
 
     # set oscillator initial conditions  
-    self.X[0,:] = np.random.rand(4) * .1 #
+    self.X[0,:] = np.ones((1,4)) * .1 #
     self.X[1,:] = self.PHI[0,:] 
 
     # save r and theta
@@ -75,57 +76,40 @@ class HopfNetwork():
     """
     # FL(2)  FR(1)
     # RL(4)  RR(3)
+
+    def footfall2phi(footfall):
+      ret = np.zeros((4,4))
+      for i in range(4):
+        for j in range(4):
+          ret[i,j] = footfall[j] - footfall[i]
+      return 2*np.pi*ret
     
     # 0.0    0.5
     # 0.5    0.0
-    self.PHI_trot = 2*np.pi*np.array(
-      ((0, 0.5, 0.5, 0),
-       (-0.5, 0, 0, -0.5),
-       (-0.5, 0, 0, -0.5),
-       (0, 0.5, 0.5, 0))
-    )
+    footfall_trot = [0.5, 0.0, 0.0, 0.5]    
+    self.PHI_trot = footfall2phi(footfall_trot)
 
-    # 0.5      0.0
+    # 0.5-     0.0-
     # 0.25     0.75
-    self.PHI_walk = 2*np.pi*np.array(
-      ((0, 0.5, 0.75, 0.25),
-       (-0.5, 0, 0.25, -0.25),
-       (0.25, -0.25, 0, 0.5),
-       (-0.25, 0.25, 0.5, 0))
-    )    
+    footfall_walk = [0.0, 0.5, 0.75, 0.25]
+    self.PHI_walk = footfall2phi(footfall_walk)
     # 0.5      0.0
     # 0.75     0.25
-    self.PHI_walk_diagonal = 2*np.pi*np.array(
-      ((0, 0.5, 0.25, 0.75),
-       (-0.5, 0, 0.75, 0.25),
-       (-0.25, 0.25, 0, 0.5),
-       (0.25, -0.25, 0.5, 0))
-    )
+    footfall_walk_diagonal = [0.0, 0.5, 0.25, 0.75]
+    self.PHI_walk_diagonal = footfall2phi(footfall_walk_diagonal)
 
-    self.PHI_bound = np.array(
-      ((0, 0, np.pi, np.pi),
-       (0, 0, np.pi, np.pi),
-       (-np.pi, -np.pi,0, 0),
-       (-np.pi, -np.pi,0, 0))
-    )
+    footfall_bound = [0.0, 0.0, 0.5, 0.5]
+    self.PHI_bound = footfall2phi(footfall_bound)
 
-    canter_param = 0
+    canter_param = 0.05 # suspension = 0.5 - 2*cp - duty(>0.25+cp)
     # 0.75+    0.5
     # 0.5      0.25-
-    self.PHI_canter_transverse = 2*np.pi*np.array((
-      (0, 0.25+canter_param,0.75-canter_param,0),
-      (0.75-canter_param, 0, 0.5-2*canter_param, 0.75-canter_param),
-      (0.25+canter_param, 0.5+2*canter_param, 0, 0.25+canter_param),
-      (0, 0.25+canter_param,0.75-canter_param,0)
-    ))
+    footfall_canter_transverse = [0.5, 0.75+canter_param, 0.25-canter_param, 0.5]
+    self.PHI_canter_transverse = footfall2phi(footfall_canter_transverse)
     # 0.5      0.75+
     # 0.5      0.25-
-    self.PHI_canter_rotatory = 2*np.pi*np.array((
-      (0, 0.75-canter_param, 0.5-2*canter_param, 0.75-canter_param),
-      (0.25+canter_param, 0, 0.75-canter_param,0),
-      (0.5+2*canter_param, 0.25+canter_param, 0, 0.25+canter_param),
-      (0.25+canter_param, 0, 0.75-canter_param,0)
-    ))
+    footfall_canter_rotatory = [0.75+canter_param, 0.5, 0.25-canter_param, 0.5]
+    self.PHI_canter_rotatory = footfall2phi(footfall_canter_rotatory)
 
     gallop_param1 = 0.05
     gallop_param2 = 0.25 # suspension interval = 1 - (gp2+gp1) or 2x (1 - 2*gp2+gp1)/2
@@ -136,40 +120,36 @@ class HopfNetwork():
       gallop_param2 = 0.4
     # p      p+
     # 0      0+
-    self.PHI_gallop_transverse = 2*np.pi*np.array(
-     ((0, -gallop_param1, -gallop_param2, -gallop_param2-gallop_param1),
-      (gallop_param1, 0, gallop_param1-gallop_param2, -gallop_param2),
-      (gallop_param2, gallop_param2-gallop_param1, 0, -gallop_param1),
-      (gallop_param2+gallop_param1, gallop_param2, gallop_param1, 0))
-    )
+    footfall_gallop_transverse = [gallop_param2+gallop_param1, gallop_param2, gallop_param1, 0]
+    self.PHI_gallop_transverse = footfall2phi(footfall_gallop_transverse)
     # 2p      2p+
     # 0+      0
-    self.PHI_gallop_rotatory = 2*np.pi*np.array(
-     ((0, -gallop_param1, -2*gallop_param2-gallop_param1, -2*gallop_param2),
-      (gallop_param1, 0, -2*gallop_param2, -2*gallop_param2+gallop_param1),
-      (2*gallop_param2+gallop_param1, 2*gallop_param2, 0, gallop_param1),
-      (2*gallop_param2, 2*gallop_param2-gallop_param1, -gallop_param1, 0))
-    )
+    footfall_gallop_rotatory = [2*gallop_param2+gallop_param1, 2*gallop_param2, 0, gallop_param1]
+    self.PHI_gallop_rotatory = footfall2phi(footfall_gallop_rotatory)
 
     # 0.0      0.5
     # 0.0      0.5
-    self.PHI_pace = np.array(
-      ((0, np.pi, 0, np.pi),
-       (np.pi, 0, np.pi, 0),
-       (0, np.pi, 0, np.pi),
-       (np.pi, 0, np.pi, 0))
-    )
+    footfall_pace = [0.5, 0, 0.5, 0]
+    self.PHI_pace = footfall2phi(footfall_pace)
 
     self.PHI_pronk = np.zeros((4,4))
 
-    global foot_y
+    global foot_y, foot_x
     if gait == "WALK":
       print('WALK')
       self.PHI = self.PHI_walk
-      # Normal walk: 3/2-leg support: 1/2 < duty < 3/4 => stance/swing in (1/3,1)
       # Very slow walk: 4-leg support: duty > 3/4
       self._omega_swing = 5.0*2*np.pi
       self._omega_stance = 1.0*2*np.pi
+      self._des_step_len = 0.04
+      self._ground_penetration = 0.01
+      self._ground_clearance = 0.05
+    elif gait == "WALK_DIAG":
+      print('WALK_DIAG')
+      self.PHI = self.PHI_walk_diagonal
+      # Normal walk: 3/2-leg support: 1/2 < duty < 3/4 => stance/swing in (1/3,1)
+      self._omega_swing = 5.0*2*np.pi
+      self._omega_stance = 3.0*2*np.pi
       self._des_step_len = 0.04
       self._ground_penetration = 0.01
       self._ground_clearance = 0.05
@@ -177,14 +157,6 @@ class HopfNetwork():
       print(gait) 
       self.PHI = self.PHI_walk
       # fast amble: 2/1-leg support: 1/4 < duty < 1/2 => stance/swing in (1,3)
-      self._omega_swing = 10.0*2*np.pi
-      self._omega_stance = 20.0*2*np.pi
-      self._des_step_len = 0.05
-      self._ground_penetration = 0.01
-      self._ground_clearance = 0.05
-    elif gait == "WALK_DIAG":
-      print('WALK_DIAG')
-      self.PHI = self.PHI_walk_diagonal
       self._omega_swing = 10.0*2*np.pi
       self._omega_stance = 15.0*2*np.pi
       self._des_step_len = 0.04
@@ -194,8 +166,8 @@ class HopfNetwork():
       print('TROT_RUN')
       self.PHI = self.PHI_trot
       # running trot: with suspension : duty < 1/2 => stance/swing > 1
-      self._omega_swing = 15.0*2*np.pi
-      self._omega_stance = 30.0*2*np.pi
+      self._omega_swing = 9.0*2*np.pi
+      self._omega_stance = 10*2*np.pi
       self._des_step_len = 0.04
       self._ground_penetration = 0.01
       self._ground_clearance = 0.05
@@ -213,81 +185,134 @@ class HopfNetwork():
       self.PHI = self.PHI_pace
       # walking-to-running pace
       # abnormal gait: the gravity point is shifting
-      foot_y = FOOT_Y * 0.4 # keep balance
+      foot_y = FOOT_Y * 1.2
+      self._robot_height *= 0.8
       # without suspension : duty >~ 1/2 => stance/swing ~< 1
-      self._omega_swing = 22.0*2*np.pi
-      self._omega_stance = 20.0*2*np.pi
-      self._des_step_len = 0.04
-      self._ground_penetration = 0.001
-      self._ground_clearance = 0.05
+      self._omega_swing = 8.0*2*np.pi
+      self._omega_stance = 6.0*2*np.pi
+      self._des_step_len = 0.05
+      self._ground_penetration = 0.01
+      self._ground_clearance = 0.06
     elif gait == "PACE_FLY":
       print('PACE_FLY') #[TODO]
       self.PHI = self.PHI_pace      
       # with suspension : duty < 1/2 => stance/swing > 1
-      foot_y = FOOT_Y * 0.6
-      self._omega_swing = 7.0*2*np.pi
-      self._omega_stance = 20.0*2*np.pi
+      foot_y = FOOT_Y * 1.5
+      self._robot_height *= 0.8
+      self._omega_swing = 6.0*2*np.pi
+      self._omega_stance = 9.0*2*np.pi
       self._des_step_len = 0.05
       self._ground_penetration = 0.01
-      self._ground_clearance = 0.06
-    elif gait == "CANTER_TRANS" or gait == "CANTER":
-      print("CANTER_TRANS") 
-      self.PHI = self.PHI_canter_transverse
-      # duty < 1/4 => stance/swing > 3
-      self._omega_swing = 7*2*np.pi
-      self._omega_stance = 23.0*2*np.pi
-      self._des_step_len = 0.04
-      self._ground_penetration = 0.01
       self._ground_clearance = 0.05
+    elif gait == "CANTER_TRANS" or gait == "CANTER":
+      print("CANTER_TRANS") # I will never change it anymore!
+      self.PHI = self.PHI_canter_transverse
+      foot_y = FOOT_Y * 1.2
+      self._robot_height *= 0.8
+      # ~ 0.35 ~ 13/7
+      self._omega_swing = 6*2*np.pi
+      self._omega_stance = 13*2*np.pi
+      self._des_step_len = 0.07
+      self._ground_penetration = 0.005
+      self._ground_clearance = 0.03
     elif gait == "CANTER_ROTA":
-      print("CANTER_ROTA") 
+      print("CANTER_ROTA")  # At least, it doesn't fall
       self.PHI = self.PHI_canter_rotatory
       # running
-      self._robot_height *= 0.9
-      self._omega_swing = 11*2*np.pi
-      self._omega_stance = 30.0*2*np.pi
-      self._des_step_len = 0.04
-      self._ground_penetration = 0.001
-      self._ground_clearance = 0.05
-    elif gait == "GALLOP_ROTA" or gait == "BOUND":
+      foot_y = FOOT_Y * 1.2
+      self._robot_height *= 0.8
+      self._omega_swing = 6.0*2*np.pi
+      self._omega_stance = 13.0*2*np.pi
+      self._des_step_len = 0.07
+      self._ground_penetration = 0.005
+      self._ground_clearance = 0.06
+    elif gait == "BOUND":
       print(gait)
       self.PHI = self.PHI_gallop_rotatory
       # running
-      self._robot_height *= 0.8
-      foot_y = FOOT_Y * 1.5
-      self._omega_swing = 8*2*np.pi
-      self._omega_stance = 35.0*2*np.pi
-      self._des_step_len = 0.05
+      #foot_y = FOOT_Y * 1.2
+      # 5.5, 10
+      # ---------- At least not fall down for BOUND-----
+      foot_x = 0.04
+      foot_y = FOOT_Y * 1.2
+      self._robot_height = 0.20
+      self._omega_swing =  5.5*2*np.pi
+      self._omega_stance = 22.0*2*np.pi
+      self._des_step_len = 0.065
       self._ground_penetration = 0.02
       self._ground_clearance = 0.07
+    elif gait == "GALLOP_ROTA":
+      print(gait)
+      self.PHI = self.PHI_gallop_rotatory
+      # ---------- A walking dog  -----
+      self._omega_swing =  11*2*np.pi
+      self._omega_stance = 20.0*2*np.pi
+      self._des_step_len = 0.05
+      self._ground_penetration = 0.02
+      self._ground_clearance = 0.05
+      # ---------- It doesn't fall down in 10 secs  -----
+      foot_y = FOOT_Y * 1.2
+      self._robot_height = 0.23
+      self._omega_swing =  9.5*2*np.pi
+      self._omega_stance = 20.0*2*np.pi
+      self._des_step_len = 0.05
+      self._ground_penetration = 0.02
+      self._ground_clearance = 0.06
     elif gait == "GALLOP_TRANS" or gait == "GALLOP":
       print(gait)
       self.PHI = self.PHI_gallop_transverse
       # running
+      # foot_y = FOOT_Y * 1.2
+      # self._robot_height *= 0.8
+      # ---------- At least not fall down -----
+      self._omega_swing = 10*2*np.pi
+      self._omega_stance = 15.0*2*np.pi
+      # ---------- Stable
+      foot_y = FOOT_Y * 1.2
       self._robot_height *= 0.9
-      self._omega_swing = 8*2*np.pi
-      self._omega_stance = 35.0*2*np.pi
+      self._omega_swing = 12*2*np.pi
+      self._omega_stance = 20.0*2*np.pi
       self._des_step_len = 0.05
-      self._ground_penetration = 0.01
-      self._ground_clearance = 0.07
+      self._ground_penetration = 0.02
+      self._ground_clearance = 0.05
+
+      # ---------- Faster! -----
+      # foot_x = 0.02
+      # foot_y = FOOT_Y * 1.2
+      # self._robot_height *= 0.9
+      # self._omega_swing = 11*2*np.pi
+      # self._omega_stance = 20.0*2*np.pi
+      # self._des_step_len = 0.06
+      # self._ground_penetration = 0.02
+      # self._ground_clearance = 0.05
     elif gait == "PRONK":
       print('PRONK')
       self.PHI = self.PHI_pronk
-      self._robot_height *= 0.8
-      self._omega_swing = 10*2*np.pi
-      self._omega_stance = 30.0*2*np.pi
-      self._des_step_len = 0.05 # 0.04 is a bit more stable
-      self._ground_penetration = 0.005
+      # ------- Stable ---------
+      # self._robot_height *= 0.8
+      self._omega_swing = 11*2*np.pi
+      self._omega_stance = 25.0*2*np.pi
+      self._des_step_len = 0.05
+      self._ground_penetration = 0.01
       self._ground_clearance = 0.07
+      # ------- Fast -- 3.50 --------
+      self._robot_height = 0.20
+      foot_y = FOOT_Y * 1.2
+      foot_x = 0.02
+      self._omega_swing = 11*2*np.pi
+      self._omega_stance = 25.0*2*np.pi
+      self._des_step_len = 0.065
+      self._ground_penetration = 0.022
+      self._ground_clearance = 0.07
+
     else:
       raise ValueError(gait + ' not implemented.')
 
-
-  def update(self, body_pitch = None, contactInfo = None):
+  def update(self, body_ori = None, contactInfo = None):
     """ Update oscillator states. """
 
     # update parameters, integrate
-    self._integrate_hopf_equations(body_pitch, contactInfo)
+    self._integrate_hopf_equations(body_ori, contactInfo)
     
     # map CPG variables to Cartesian foot xz positions (Equations 8, 9) 
     r, theta = self.X[0, :], self.X[1, :]
@@ -307,13 +332,19 @@ class HopfNetwork():
         self.state[i] = "STANCE"
         # if contactInfo is not None and not contactBool[i]:
         #   factor = 1.1
-      z[i] = -self._robot_height*factor + r[i]*np.sin(theta[i]) * g # [tODO]
+      # if i < 2:
+      #   factor = 1.25
+      # else: factor = 0.75
+      z[i] = -self._robot_height + r[i]*np.sin(theta[i]) * g *factor# [tODO]
       
-    
+    # if body_ori is not None:
+    #   roll, pitch, yaw = body_ori
+        
+
     return x, z
       
         
-  def _integrate_hopf_equations(self, body_pitch = None, contactInfo = None):
+  def _integrate_hopf_equations(self, body_ori = None, contactInfo = None):
     """ Hopf polar equations and integration. Use equations 6 and 7. """
     # bookkeeping - save copies of current CPG states 
     X = self.X.copy()
@@ -334,7 +365,8 @@ class HopfNetwork():
         theta_dot = self._omega_swing
       else:
         theta_dot = self._omega_stance
-      # theta_dot = self._omega_swing if theta < np.pi else self._omega_stance # [tODO]
+      
+      #theta_dot *= np.cos(theta) + 1.1 #abs(0.3+0.7*np.pi/2*np.sin(theta))
 
       # loop through other oscillators to add coupling (Equation 7)
       if self._couple:
@@ -347,19 +379,6 @@ class HopfNetwork():
       
       if theta_dot < 0:
         theta_dot = 0
-      if body_pitch is not None:
-        sbody = np.sin(body_pitch)
-        if sbody > 0:
-          # speed up fore legs
-          if i < 2:
-            theta_dot *= 1.2**sbody
-          else:
-            theta_dot /= 1.2**sbody
-        else:
-          if i < 2:
-            theta_dot /= 1.2**sbody
-          else:
-            theta_dot *= 1.2**sbody
 
       if contactInfo is not None:
         contactBool, forceNormal = contactInfo
@@ -397,9 +416,11 @@ if __name__ == "__main__":
   ADD_JOINT_PD = True
   USE_FEEDBACK = False
   ON_RACK = False
-  gait_direction = 0 # forward
-  gait_name = "WALK"
-  simulation_time = 4.0
+  TRACK_DIRECTION = False
+  gait_direction = 0 #np.pi # forward
+  gait_name = "PRONK"
+  simulation_time = 10.0
+  PLAY_SPEED = 0.25
 
   if not ADD_CARTESIAN_PD and not ADD_JOINT_PD:
     raise("At least one PD needed")
@@ -417,7 +438,7 @@ if __name__ == "__main__":
                       action_repeat=1,
                       motor_control_mode="PD",
                       add_noise=False,    # start in ideal conditions
-                      record_video=True
+                      #record_video=True
                       )
   # env.add_random_boxes()
 
@@ -456,6 +477,8 @@ if __name__ == "__main__":
   kpCartesian = np.diag([2500]*3)
   kdCartesian = np.diag([40]*3)
 
+  total_starter = time.time()
+
   for j in range(TEST_STEPS):
     starter = time.time()
     # initialize torque array to send to motors
@@ -466,13 +489,23 @@ if __name__ == "__main__":
     orientation_history[j] = np.array((roll, pitch, yaw))
     numValidContacts, numInvalidContacts, feetNormalForces, feetInContactBool = env.robot.GetContactInfo()
     if USE_FEEDBACK:
-      xs,zs = cpg.update(body_pitch = None, contactInfo=(feetInContactBool, feetNormalForces)) #feetInContactBool
+      xs,zs = cpg.update(body_ori = (roll, pitch, yaw), contactInfo=(feetInContactBool, feetNormalForces)) #feetInContactBool
     else:
-      xs,zs = cpg.update(body_pitch = None)
+      xs,zs = cpg.update(body_ori = (roll, pitch, yaw))
     ys = foot_y * sideSign
-    if notpureforward:
-      ys += np.sin(gait_direction) * xs
-      xs = np.cos(gait_direction) * xs
+    if notpureforward or TRACK_DIRECTION:
+      forward_direction = gait_direction-yaw
+      ys += np.sin(forward_direction) * xs
+      xs = np.cos(forward_direction) * xs
+
+    xs += foot_x
+    if False:
+      if roll > 0:
+        ys[0] *= 1 + roll/np.pi/2
+        ys[2] *= 1 + roll/np.pi/2
+      else:
+        ys[1] *= 1 + roll/np.pi/2
+        ys[3] *= 1 + roll/np.pi/2
 
     # [tODO] get current motor angles and velocities for joint PD, see GetMotorAngles(), GetMotorVelocities() in quadruped.py
     q_last = env.robot.GetMotorAngles()
@@ -530,10 +563,13 @@ if __name__ == "__main__":
 
     linear_vel = env.robot.GetBaseLinearVelocity()
     speed_history[j, :] = linear_vel
-    # loop_time = time.time() - starter
-    # if loop_time < TIME_STEP:
-    #   print("sleep", TIME_STEP - loop_time)
-    #   time.sleep(TIME_STEP - loop_time)
+    loop_time = time.time() - total_starter
+    if env._is_render:
+      if loop_time < TIME_STEP/PLAY_SPEED*(j+1):
+      # print("sleep", TIME_STEP - loop_time)
+        time.sleep(TIME_STEP/PLAY_SPEED*(j+1) - loop_time)
+      # else:
+      #   print("\rovertime", loop_time - TIME_STEP/PLAY_SPEED*(j+1), end="")
 
   cur_position = env.robot.GetBasePosition()
   distance_traveled = np.linalg.norm(cur_position)
@@ -549,8 +585,8 @@ if __name__ == "__main__":
   print("Distance Traveled:", distance_traveled)
   print("Cost of Transport:", enery_cost/distance_traveled)
   print("average abs(pitch):", np.mean(abs(orientation_history[:,1])))
-  print("orientation variance:", np.var(orientation_history))
-  print("average x-y speed", np.mean(np.linalg.norm(speed_history[:, :2], axis=1)))
+  print("orientation variance:", np.var(orientation_history, axis=0))
+  print("average x-y speed(last50%)", np.mean(np.linalg.norm(speed_history[int(len(t)/2):, :2], axis=1)))
 
   # fig = plt.figure()
   # plt.plot(t, action_history)
@@ -567,7 +603,8 @@ if __name__ == "__main__":
     plt.legend(["r","theta","dr","dtheta"])#,"contact"])
   #plt.subplot(5,1,5)
   #plt.plot(t, orientation_history)
-  plt.legend(["roll","pitch","yaw"])
+  #plt.legend(["roll","pitch","yaw"])
+  plt.tight_layout()
 
   fig = plt.figure()
   plt.title("Position " + leg_names[history_leg_ind] +" Real vs Desire")
