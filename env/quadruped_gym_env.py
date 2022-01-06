@@ -1,4 +1,12 @@
-"""This file implements the gym environment for a quadruped. """
+'''
+Author: Legged Robots
+LastEditors: Chengkun Li
+Date: 2021-11-30 22:27:51
+LastEditTime: 2022-01-06 17:31:30
+Description: This file implements the gym environment for a quadruped.
+FilePath: /lr-proj2-quad-cpg-rl/env/quadruped_gym_env.py
+'''
+
 import os, inspect
 # so we can import files
 currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
@@ -20,6 +28,9 @@ random.seed(10)
 import quadruped
 import configs_a1 as robot_config
 
+# loggers
+from loguru import logger
+
 
 ACTION_EPS = 0.01
 OBSERVATION_EPS = 0.01
@@ -36,7 +47,7 @@ VIDEO_LOG_DIRECTORY = 'videos/' + datetime.datetime.now().strftime("vid-%Y-%m-%d
 #         [TODO: what should you train for?]
 #         Ideally we want to command A1 to run in any direction while expending minimal energy
 #         It is suggested to first train to run at 3 sample velocities (0.5 m/s, 1 m/s, 1.5 m/s)
-#         How will you construct your reward function? 
+#         How will you construct your reward function?  
 
 # Motor control modes:
 #   - "TORQUE": 
@@ -75,8 +86,9 @@ class QuadrupedGymEnv(gym.Env):
       render=False,
       record_video=False,
       add_noise=True,
-      test_env=False,
-      competition_env=False, # NOT ALLOWED FOR TRAINING!
+      test_env=False, # NOT ALLOWED FOR TRAINING!
+      dy_rand=False,
+      competition_env=False,
       **kwargs): # any extra arguments from legacy
     """Initialize the quadruped gym environment.
 
@@ -113,6 +125,7 @@ class QuadrupedGymEnv(gym.Env):
     self._on_rack = on_rack
     self._is_render = render
     self._is_record_video = record_video
+    self._dy_rand = dy_rand
     self._add_noise = add_noise
     self._using_test_env = test_env
     self._using_competition_env = competition_env
@@ -120,6 +133,8 @@ class QuadrupedGymEnv(gym.Env):
       test_env = False
       self._using_test_env = False
       self._add_noise = False
+    if dy_rand:
+      self._observation_noise_stdev = 0.02
     if test_env:
       self._add_noise = True
       self._observation_noise_stdev = 0.01 #
@@ -162,8 +177,31 @@ class QuadrupedGymEnv(gym.Env):
     elif self._observation_space_mode == "LR_COURSE_OBS":
       # [TODO] Set observation upper and lower ranges. What are reasonable limits? 
       # Note 50 is arbitrary below, you may have more or less
-      observation_high = (np.zeros(50) + OBSERVATION_EPS)
-      observation_low = (np.zeros(50) -  OBSERVATION_EPS)
+      observation_high = (np.concatenate((
+        np.array([19.] * 3),
+        np.array([.1] * 3),
+        self._robot_config.UPPER_ANGLE_JOINT,
+        self._robot_config.VELOCITY_LIMITS,
+        self._robot_config.TORQUE_LIMITS,
+        np.array([1.0] * 4),
+        np.array([1.0] * 12),
+        np.array([5.0] * 12),
+        np.array([1.0] * 4),
+        np.array([400.0] * 4),
+      )) + OBSERVATION_EPS)
+      observation_low = (np.concatenate((
+        np.array([-19.] * 3),
+        np.array([-.1] * 3),
+        self._robot_config.LOWER_ANGLE_JOINT,
+        -self._robot_config.VELOCITY_LIMITS,
+        -self._robot_config.TORQUE_LIMITS,
+        np.array([-1.0] * 4),
+        np.array([-1.0] * 12),
+        np.array([-5.0] * 12),
+        np.array([-1.0] * 4),
+        np.array([-1.0] * 4),
+      )) -  OBSERVATION_EPS)
+      logger.info("Observational space dimension: {}".format(observation_high.shape))
     else:
       raise ValueError("observation space not defined or not intended")
 
@@ -175,21 +213,53 @@ class QuadrupedGymEnv(gym.Env):
       action_dim = 12
     else:
       raise ValueError("motor control mode " + self._motor_control_mode + " not implemented yet.")
-    action_high = np.array([1] * action_dim)
-    self.action_space = spaces.Box(-action_high, action_high, dtype=np.float32)
-    self._action_dim = action_dim
+    if self._motor_control_mode == 'CARTESIAN_PD':
+      action_high = np.array([1] * action_dim)# np.array([0.2, 0.05, -0.15] *  4)
+      action_low = np.array([-1] * action_dim)# np.array([-0.2, -0.05, -0.33] * 4) 
+      self.action_space = spaces.Box(action_low, action_high, dtype=np.float32)
+      self._action_dim = action_dim
+    elif self._motor_control_mode in ["PD","TORQUE"]:
+      action_high = np.array([1] * action_dim)
+      self.action_space = spaces.Box(-action_high, action_high, dtype=np.float32)
+      self._action_dim = action_dim
 
-
+  @logger.catch()
   def _get_observation(self):
     """Get observation, depending on obs space selected. """
     if self._observation_space_mode == "DEFAULT":
       self._observation = np.concatenate((self.robot.GetMotorAngles(), 
                                           self.robot.GetMotorVelocities(),
                                           self.robot.GetBaseOrientation() ))
+      # logger.debug(self._observation.shape)
     elif self._observation_space_mode == "LR_COURSE_OBS":
       # [TODO] Get observation from robot. What are reasonable measurements we could get on hardware?
       # 50 is arbitrary
-      self._observation = np.zeros(50)
+      # Get foot positions
+      foot_pos = []
+      foot_vel = []
+      dq = (self.robot.GetMotorVelocities().reshape(-1, 3)).T
+
+      for legid in range(4):
+        J, pos = self.robot.ComputeJacobianAndPosition(legid)
+        vel = np.matmul(J, dq[:, legid]).tolist()
+        foot_vel += vel
+        foot_pos += pos.tolist()
+      foot_vel = np.array(foot_vel)
+      foot_pos = np.array(foot_pos)
+      # Get observation space vectors
+      self._observation = np.concatenate((
+        self.robot.GetBaseLinearVelocity(), # 3x1
+        self.robot.GetBaseAngularVelocity(), # 3x1
+        self.robot.GetMotorAngles(), # 12x1
+        self.robot.GetMotorVelocities(), # 12x1
+        self.robot.GetMotorTorques(), # 12x1
+        self.robot.GetBaseOrientation(), # 4x1
+        foot_pos, # 12x1
+        foot_vel, # 12x1
+        np.array(self.robot.GetContactInfo()[3]), # 4x1,
+        np.array(self.robot.GetContactInfo()[2]), # 4x1
+      ))
+      # logger.debug("The length of observation space: {}", len(self._observation))
 
     else:
       raise ValueError("observation space not defined or not intended")
@@ -244,8 +314,20 @@ class QuadrupedGymEnv(gym.Env):
 
   def _reward_lr_course(self):
     """ Implement your reward function here. How will you improve upon the above? """
-    # [TODO] add your reward function. 
-    return 0
+    current_base_position = self.robot.GetBasePosition()
+    current_motor_torque = self.robot.GetMotorTorques()
+    current_motor_speed = self.robot.GetMotorVelocities()
+    energy_reward = np.abs(np.dot(current_motor_torque, current_motor_speed)) * (self._time_step * self._action_repeat)
+    forward_reward = current_base_position[0] - self._last_base_position[0]
+    y_disp_reward = current_base_position[1] - self._last_base_position[1]
+    self._last_base_position = current_base_position
+    # clip reward to MAX_FWD_VELOCITY (avoid exploiting simulator dynamics)
+    if MAX_FWD_VELOCITY < np.inf:
+      # calculate what max distance can be over last time interval based on max allowed fwd velocity
+      max_dist = MAX_FWD_VELOCITY * (self._time_step * self._action_repeat)
+      forward_reward = min(forward_reward, max_dist)
+
+    return self._distance_weight * forward_reward - self._energy_weight * energy_reward + 0.01 - 0.002 * y_disp_reward
 
   def _reward(self):
     """ Get reward depending on task"""
@@ -284,7 +366,7 @@ class QuadrupedGymEnv(gym.Env):
     # clip RL actions to be between -1 and 1 (standard RL technique)
     u = np.clip(actions,-1,1)
     # scale to corresponding desired foot positions (i.e. ranges in x,y,z we allow the agent to choose foot positions)
-    # [TODO: edit (do you think these should these be increased? How limiting is this?)]
+    # [TODO: edit (do you think these should be increased? How limiting is this?)]
     scale_array = np.array([0.1, 0.05, 0.08]*4)
     # add to nominal foot position in leg frame (what are the final ranges?)
     des_foot_pos = self._robot_config.NOMINAL_FOOT_POS_LEG_FRAME + scale_array*u
@@ -293,20 +375,21 @@ class QuadrupedGymEnv(gym.Env):
     kpCartesian = self._robot_config.kpCartesian
     kdCartesian = self._robot_config.kdCartesian
     # get current motor velocities
-    qd = self.robot.GetMotorVelocities()
+    qd = self.robot.GetMotorVelocities().reshape(-1, 3).T
 
     action = np.zeros(12)
     for i in range(4):
       # get Jacobian and foot position in leg frame for leg i (see ComputeJacobianAndPosition() in quadruped.py)
-      # [TODO]
+      J, pos = self.robot.ComputeJacobianAndPosition(i)
       # desired foot position i (from RL above)
-      Pd = np.zeros(3) # [TODO]
+      Pd = des_foot_pos[i*3: i*3+3]
       # desired foot velocity i
       vd = np.zeros(3) 
       # foot velocity in leg frame i (Equation 2)
-      # [TODO]
+      vl = np.matmul(J, qd[:, i])
       # calculate torques with Cartesian PD (Equation 5) [Make sure you are using matrix multiplications]
-      tau = np.zeros(3) # [TODO]
+      tau = np.matmul(J.T, np.matmul(kpCartesian, (Pd - pos)) \
+         + np.matmul(kdCartesian, (vd - vl)))
 
       action[3*i:3*i+3] = tau
 
@@ -380,6 +463,14 @@ class QuadrupedGymEnv(gym.Env):
         if self._is_render:
           print('ground friction coefficient is', ground_mu_k)
 
+      if self._dy_rand:
+        ground_mu_k = mu_min+(1-mu_min)*np.random.random()
+        self._ground_mu_k = ground_mu_k
+        self._pybullet_client.changeDynamics(self.plane, -1, lateralFriction=ground_mu_k)
+        self.add_random_boxes(z_height=0.1*random.uniform(1, 1.2))
+        self._pybullet_client.setGravity(0+random.uniform(-0.01, 0.01),\
+           0+random.uniform(-0.01, 0.01), -9.8*random.uniform(1, 1.2))
+        
       if self._using_test_env:
         self.add_random_boxes()
         self._add_base_mass_offset()
@@ -595,28 +686,27 @@ class QuadrupedGymEnv(gym.Env):
                           basePosition = [x_upp/2,-y_low,0.5],baseOrientation=orn)
 
   def add_competition_blocks(self, num_stairs=100, stair_height=0.12, stair_width=0.25):
-    """Wide, long so can't get around """
-    y = 6
-    block_x = stair_width * np.ones(num_stairs)
-    block_z = np.arange(0,num_stairs)
-    t = np.linspace(0,2*np.pi,num_stairs)
-    block_z = stair_height*block_z/num_stairs * np.cos(block_z*np.pi/3 * t)
-    curr_x = 1
-    curr_z = 0 
-    # loop through
-    for i in range(num_stairs):
-      curr_z = block_z[i]
-      if curr_z > 0.005:
-        sh_colBox = self._pybullet_client.createCollisionShape(self._pybullet_client.GEOM_BOX,
-            halfExtents=[block_x[i]/2,y/2,curr_z/2])
-        orn = self._pybullet_client.getQuaternionFromEuler([0,0,0])
-        block2=self._pybullet_client.createMultiBody(baseMass=0,baseCollisionShapeIndex = sh_colBox,
-                              basePosition = [curr_x,0,curr_z/2],baseOrientation=orn)
-        # set friction coefficient 
-        self._pybullet_client.changeDynamics(block2, -1, lateralFriction=self._ground_mu_k)
+      """Wide, long so can't get around """
+      y = 6
+      block_x = stair_width * np.ones(num_stairs)
+      block_z = np.arange(0,num_stairs)
+      t = np.linspace(0,2*np.pi,num_stairs)
+      block_z = stair_height*block_z/num_stairs * np.cos(block_z*np.pi/3 * t)
+      curr_x = 1
+      curr_z = 0 
+      # loop through
+      for i in range(num_stairs):
+        curr_z = block_z[i]
+        if curr_z > 0.005:
+          sh_colBox = self._pybullet_client.createCollisionShape(self._pybullet_client.GEOM_BOX,
+              halfExtents=[block_x[i]/2,y/2,curr_z/2])
+          orn = self._pybullet_client.getQuaternionFromEuler([0,0,0])
+          block2=self._pybullet_client.createMultiBody(baseMass=0,baseCollisionShapeIndex = sh_colBox,
+                                basePosition = [curr_x,0,curr_z/2],baseOrientation=orn)
+          # set friction coefficient 
+          self._pybullet_client.changeDynamics(block2, -1, lateralFriction=self._ground_mu_k)
 
-      curr_x += block_x[i]
-
+        curr_x += block_x[i]
 
   def _add_base_mass_offset(self, spec_mass=None, spec_location=None):
     """Attach mass to robot base."""
@@ -660,7 +750,7 @@ class QuadrupedGymEnv(gym.Env):
 
 def test_env():
   env = QuadrupedGymEnv(render=True, 
-                        on_rack=True,
+                        on_rack=False,
                         motor_control_mode='PD',
                         action_repeat=100,
                         )
@@ -674,6 +764,7 @@ def test_env():
   while True:
     action = 2*np.random.rand(action_dim)-1
     obs, reward, done, info = env.step(action)
+    print(reward)
 
 
 if __name__ == "__main__":
