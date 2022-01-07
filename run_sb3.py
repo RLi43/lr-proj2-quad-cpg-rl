@@ -20,6 +20,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--energy_weight', type=float, default=0.004)
 parser.add_argument('--lr', type=float, default=2e-4)
 parser.add_argument('--policy', type=str, default="PPO")
+parser.add_argument('--energy_type', type=str, default="abs", choices=['abs', 'plain', 'nonzero'])
 parser.add_argument('--num_env', type=int, default=4)
 parser.add_argument('--timesteps', type=int, default=1000000)
 parser.add_argument('--dy_rand', dest='dy_rand', action='store_true')
@@ -38,6 +39,7 @@ env_configs = {"motor_control_mode": "CARTESIAN_PD" if not args.jointpd else "PD
                "task_env": "LR_COURSE_TASK",
                "observation_space_mode": "LR_COURSE_OBS",
                "dy_rand": args.dy_rand,
+               "energy_type": args.energy_type
                }
 env_configs["energy_weight"] = args.energy_weight# 0.008
 

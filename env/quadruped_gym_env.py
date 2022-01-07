@@ -2,7 +2,7 @@
 Author: Legged Robots
 LastEditors: Chengkun Li
 Date: 2021-11-30 22:27:51
-LastEditTime: 2021-12-29 20:16:56
+LastEditTime: 2022-01-07 01:08:20
 Description: This file implements the gym environment for a quadruped.
 FilePath: /lr-proj2-quad-cpg-rl/env/quadruped_gym_env.py
 '''
@@ -89,6 +89,7 @@ class QuadrupedGymEnv(gym.Env):
       test_env=False, # NOT ALLOWED FOR TRAINING!
       dy_rand=False,
       competition_env=False,
+      energy_type='abs',
       **kwargs): # any extra arguments from legacy
     """Initialize the quadruped gym environment.
 
@@ -128,6 +129,7 @@ class QuadrupedGymEnv(gym.Env):
     self._add_noise = add_noise
     self._using_test_env = test_env
     self._using_competition_env = competition_env
+    self._energy_type = energy_type
     if competition_env:
       test_env = False
       self._using_test_env = False
@@ -316,7 +318,12 @@ class QuadrupedGymEnv(gym.Env):
     current_base_position = self.robot.GetBasePosition()
     current_motor_torque = self.robot.GetMotorTorques()
     current_motor_speed = self.robot.GetMotorVelocities()
-    energy_reward = np.abs(np.dot(current_motor_torque, current_motor_speed)) * (self._time_step * self._action_repeat)
+    if self._energy_type == 'abs':
+      energy_reward = np.abs(np.dot(current_motor_torque, current_motor_speed)) * (self._time_step * self._action_repeat)
+    elif self._energy_type == 'plain':
+      energy_reward = np.dot(current_motor_torque, current_motor_speed) * (self._time_step * self._action_repeat)
+    elif self._energy_type == 'nonzero':
+      energy_reward = np.max(np.dot(current_motor_torque, current_motor_speed), 0) * (self._time_step * self._action_repeat)
     forward_reward = current_base_position[0] - self._last_base_position[0]
     y_disp_reward = current_base_position[1] - self._last_base_position[1]
     self._last_base_position = current_base_position
