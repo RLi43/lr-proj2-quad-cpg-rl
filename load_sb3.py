@@ -2,7 +2,7 @@
 Author: Chengkun Li
 LastEditors: Chengkun Li
 Date: 2021-12-01 02:23:02
-LastEditTime: 2022-01-07 18:25:58
+LastEditTime: 2022-01-07 22:14:55
 Description: Modify here please
 FilePath: /lr-proj2-quad-cpg-rl/load_sb3.py
 '''
@@ -41,23 +41,23 @@ from utils.file_utils import get_latest_model, load_all_results
 LEARNING_ALG = "SAC"
 interm_dir = "./logs/intermediate_models/"
 # path to saved models, i.e. interm_dir + '111121133812'
-log_dir = interm_dir + '010622232159'
+log_dir = interm_dir + '010522110208'
 
 # initialize env configs (render at test time)
 # check ideal conditions, as well as robustness to UNSEEN noise during training
-env_config = {"motor_control_mode":"CARTESIAN_PD",
+env_config = {"motor_control_mode":"PD",
                "task_env": "LR_COURSE_TASK",
                "observation_space_mode": "LR_COURSE_OBS"}
 env_config['render'] = True
 env_config['record_video'] = False
 env_config['add_noise'] = False 
 env_config['test_env'] = False
-env_config['competition_env'] = False
+env_config['competition_env'] = True
 env_config['dy_rand'] = False # for training! only for validation!
 
 
 
-plot_monitor = True
+plot_monitor = False
 
 
 # get latest model and normalization stats, and plot 
@@ -155,7 +155,7 @@ for i in range(steps):
 
     # Calculate energy
     q = motor_angles[i, :, :].ravel()
-    step_energy = sum((q - q_hist) * motor_torques[i, :, :].ravel())
+    step_energy = np.sum((q - q_hist) * motor_torques[i, :, :].ravel(), axis=0)
     # logger.debug("{}, {}, {}".format((q - q_hist),  motor_torques[i, :, :].ravel(), (q - q_hist) * motor_torques[i, :, :].ravel()))
     
     # ISSUES: there are abnormal energy values at the beginning of control
@@ -193,7 +193,7 @@ for i in range(steps):
         dist_per_trail.append(info[0]['base_pos'][0])
         logger.info('Current mean of end position: {}'.format(np.mean(dist_per_trail)))
         # logger.info('Total distance traveled: {}', distance)
-        COT = energy/distance
+        COT = energy/distance/12.454/9.8 # Assume test in environments with no gravity variations
         hist_COT.append(COT)
         logger.info('Current mean of COT = {}; COT of this trail: {}'.format(np.mean(hist_COT), COT))
         episode_reward = 0
