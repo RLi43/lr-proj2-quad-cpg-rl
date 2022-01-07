@@ -2,7 +2,7 @@
 Author: Chengkun Li
 LastEditors: Chengkun Li
 Date: 2021-12-01 02:23:02
-LastEditTime: 2022-01-07 22:14:55
+LastEditTime: 2022-01-07 23:12:41
 Description: Modify here please
 FilePath: /lr-proj2-quad-cpg-rl/load_sb3.py
 '''
@@ -183,11 +183,7 @@ for i in range(steps):
     # logger.info('robot contact normal force: {}'.format(env.envs[0].env.robot.GetContactInfo()[2]))
     if dones:
         print("=================== Overview ===================")
-        logger.info('episode_reward: {}'.format(episode_reward))
-        logger.info('Average speed: {}'.format(np.mean(np.sqrt(base_linear[:steps, 0]**2 + base_linear[:steps, 1]**2))))
-        for foot in range(4):
-          avg_height = np.mean(base_pos[:steps, 2] + foot_pos[:steps, foot, 2])
-          logger.info('Average foot height of {}: {}'.format(leg_name[foot], avg_height))
+        
         logger.info('Final base position: {}'.format(info[0]['base_pos']))
         logger.info('Total energy is {}'.format(energy))
         dist_per_trail.append(info[0]['base_pos'][0])
@@ -205,8 +201,15 @@ for i in range(steps):
         
         if only_once:
           steps = i
+          logger.info('episode_reward: {}'.format(episode_reward))
+          logger.info(steps)
+          avg_v = np.mean(np.sqrt(base_linear[:steps, 0]**2 + base_linear[:steps, 1]**2))
+          logger.info('Average speed: {}'.format(avg_v))
+          for foot in range(4):
+            avg_height = np.mean(base_pos[:steps, 2] + foot_pos[:steps, foot, 2])
+            logger.info('Average foot height of {}: {}'.format(leg_name[foot], avg_height))
           break
-    
+          
 
 
 """
