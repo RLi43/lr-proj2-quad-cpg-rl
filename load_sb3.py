@@ -92,7 +92,7 @@ leg_name = ['FR', 'FL', 'RR', 'RL']
 
 steps = 5000
 # Plot only one trial
-only_once = True
+only_once = False
 base_linear = np.zeros([steps, 3])
 base_angular = np.zeros([steps, 3])
 motor_angles = np.zeros([steps, 4, 3])

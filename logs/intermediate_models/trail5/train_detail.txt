@@ -1,0 +1,9 @@
+{
+  "energy_weight": 0.0,
+  "lr": 0.0001,
+  "policy": "SAC",
+  "num_env": 1,
+  "timesteps": 2000000,
+  "dy_rand": true,
+  "jointpd": true
+}

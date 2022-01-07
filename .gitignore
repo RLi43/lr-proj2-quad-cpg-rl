@@ -3,3 +3,7 @@
 __pycache__/
 
 videos/
+temp/
+*.monitor.csv
+results.txt
+off_policy_replay_buffer.pkl

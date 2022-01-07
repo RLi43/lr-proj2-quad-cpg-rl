@@ -1,0 +1,8 @@
+{
+  "energy_weight": 0.001,
+  "lr": 0.0003,
+  "policy": "PPO",
+  "num_env": 4,
+  "timesteps": 1000000,
+  "dy_rand": true
+}
