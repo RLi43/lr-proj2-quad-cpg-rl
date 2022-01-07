@@ -2,7 +2,7 @@
 Author: Chengkun Li
 LastEditors: Chengkun Li
 Date: 2021-12-01 02:23:02
-LastEditTime: 2022-01-05 20:09:10
+LastEditTime: 2022-01-07 01:40:19
 Description: Modify here please
 FilePath: /lr-proj2-quad-cpg-rl/load_sb3.py
 '''
@@ -41,7 +41,7 @@ from utils.file_utils import get_latest_model, load_all_results
 LEARNING_ALG = "PPO"
 interm_dir = "./logs/intermediate_models/"
 # path to saved models, i.e. interm_dir + '111121133812'
-log_dir = interm_dir + '010322222537'
+log_dir = interm_dir + '010422010556'
 
 # initialize env configs (render at test time)
 # check ideal conditions, as well as robustness to UNSEEN noise during training
@@ -57,7 +57,7 @@ env_config['dy_rand'] = False # for training! only for validation!
 
 
 
-plot_monitor = False
+plot_monitor = True
 
 
 # get latest model and normalization stats, and plot 
@@ -91,7 +91,7 @@ episode_reward = 0
 
 steps = 5000
 # Plot only one trial
-only_once = True
+only_once = False
 base_linear = np.zeros([steps, 3])
 base_angular = np.zeros([steps, 3])
 motor_angles = np.zeros([steps, 4, 3])
@@ -110,6 +110,7 @@ distance = 0
 x, y = 0, 0
 x_prev, y_prev = 0, 0
 dist_per_trail = []
+hist_COT = []
 
 for i in range(steps):
     action, _states = model.predict(obs,deterministic=False) # sample at test time? ([TODO]: test)
@@ -151,6 +152,13 @@ for i in range(steps):
     q = motor_angles[i, :, :].ravel()
     step_energy = sum((q - q_hist) * motor_torques[i, :, :].ravel())
     # logger.debug("{}, {}, {}".format((q - q_hist),  motor_torques[i, :, :].ravel(), (q - q_hist) * motor_torques[i, :, :].ravel()))
+    
+    # ISSUES: there are abnormal energy values at the beginning of joint pd control
+    # current solution: remove them from the total energy calculation
+    if i == start_i:
+      logger.debug('step_energy at i={}: {}'.format(start_i, step_energy))
+      if env_config['motor_control_mode'] == "CARTESIAN_PD":
+        step_energy = 0
     energy += step_energy
     if energy < 0:
       # logger.warning('Energy is negative now!')
@@ -172,13 +180,16 @@ for i in range(steps):
         logger.info('episode_reward: {}'.format(episode_reward))
         logger.info('Total energy is {}'.format(energy))
         logger.info('Total distance traveled: {}', distance)
-        logger.info('COT = {}'.format(energy/distance))
+        COT = energy/distance
+        hist_COT.append(COT)
+        logger.info('Current mean of COT = {}; COT of this trail: {}'.format(np.mean(hist_COT), COT))
         logger.info('Final base position: {}'.format(info[0]['base_pos']))
         dist_per_trail.append(info[0]['base_pos'][0])
         logger.info('Current mean of end position: {}'.format(np.mean(dist_per_trail)))
         episode_reward = 0
         energy = 0
         distance = 0
+        start_i = i+1
         q_hist = [0]*12
         
         
