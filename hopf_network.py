@@ -141,45 +141,45 @@ class HopfNetwork():
       # Very slow walk: 4-leg support: duty > 3/4
       self._omega_swing = 5.0*2*np.pi
       self._omega_stance = 1.0*2*np.pi
-      self._des_step_len = 0.04
-      self._ground_penetration = 0.01
-      self._ground_clearance = 0.05
+      # self._des_step_len = 0.04
+      # self._ground_penetration = 0.01
+      # self._ground_clearance = 0.05
     elif gait == "WALK_DIAG":
       print('WALK_DIAG')
       self.PHI = self.PHI_walk_diagonal
       # Normal walk: 3/2-leg support: 1/2 < duty < 3/4 => stance/swing in (1/3,1)
       self._omega_swing = 5.0*2*np.pi
       self._omega_stance = 3.0*2*np.pi
-      self._des_step_len = 0.04
-      self._ground_penetration = 0.01
-      self._ground_clearance = 0.05
+      # self._des_step_len = 0.04
+      # self._ground_penetration = 0.01
+      # self._ground_clearance = 0.05
     elif gait == "AMBLE":
       print(gait) 
       self.PHI = self.PHI_walk
       # fast amble: 2/1-leg support: 1/4 < duty < 1/2 => stance/swing in (1,3)
       self._omega_swing = 10.0*2*np.pi
       self._omega_stance = 15.0*2*np.pi
-      self._des_step_len = 0.04
-      self._ground_penetration = 0.01
-      self._ground_clearance = 0.05
+      # self._des_step_len = 0.04
+      # self._ground_penetration = 0.01
+      # self._ground_clearance = 0.05
     elif gait == "TROT" or gait == "TROT_RUN":
       print('TROT_RUN')
       self.PHI = self.PHI_trot
       # running trot: with suspension : duty < 1/2 => stance/swing > 1
       self._omega_swing = 9.0*2*np.pi
       self._omega_stance = 10*2*np.pi
-      self._des_step_len = 0.04
-      self._ground_penetration = 0.01
-      self._ground_clearance = 0.05
+      # self._des_step_len = 0.04
+      # self._ground_penetration = 0.01
+      # self._ground_clearance = 0.05
     elif gait == "TROT_WALK":
       print('TROT_WALK')
       self.PHI = self.PHI_trot
       # walking trot: without suspension : duty > 1/2 => stance/swing < 1
       self._omega_swing = 2.2*2*np.pi
       self._omega_stance = 2.0*2*np.pi
-      self._des_step_len = 0.04
-      self._ground_penetration = 0.01
-      self._ground_clearance = 0.05
+      # self._des_step_len = 0.04
+      # self._ground_penetration = 0.01
+      # self._ground_clearance = 0.05
     elif gait == "PACE":
       print('PACE')
       self.PHI = self.PHI_pace
@@ -202,8 +202,8 @@ class HopfNetwork():
       self._omega_swing = 6.0*2*np.pi
       self._omega_stance = 9.0*2*np.pi
       self._des_step_len = 0.05
-      self._ground_penetration = 0.01
-      self._ground_clearance = 0.05
+      #self._ground_penetration = 0.01
+      #self._ground_clearance = 0.05
     elif gait == "CANTER_TRANS" or gait == "CANTER":
       print("CANTER_TRANS") # I will never change it anymore!
       self.PHI = self.PHI_canter_transverse
@@ -274,7 +274,7 @@ class HopfNetwork():
       self._omega_stance = 20.0*2*np.pi
       self._des_step_len = 0.05
       self._ground_penetration = 0.02
-      self._ground_clearance = 0.05
+      # self._ground_clearance = 0.05
 
       # ---------- Faster! -----
       # foot_x = 0.02
@@ -418,7 +418,7 @@ if __name__ == "__main__":
   ON_RACK = False
   TRACK_DIRECTION = False
   gait_direction = 0 #np.pi # forward
-  gait_name = "PRONK"
+  gait_name = "WALK"
   simulation_time = 10.0
   PLAY_SPEED = 0.25
 
