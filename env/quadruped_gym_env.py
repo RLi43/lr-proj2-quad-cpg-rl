@@ -332,7 +332,7 @@ class QuadrupedGymEnv(gym.Env):
     foot_z = foot_p[2:12:3]
     foot_contact_bool = np.array(self.robot.GetContactInfo()[3])
 
-    robot_height = 0.25
+    robot_height = self.robot.GetBasePosition()[2]
     foot_z += robot_height
     # foot height should be in a resonable range
     max_ground_clearance = 0.13
