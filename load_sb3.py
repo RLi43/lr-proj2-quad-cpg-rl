@@ -2,7 +2,7 @@
 Author: Chengkun Li
 LastEditors: Chengkun Li
 Date: 2021-12-01 02:23:02
-LastEditTime: 2022-01-07 15:28:58
+LastEditTime: 2022-01-07 18:25:58
 Description: Modify here please
 FilePath: /lr-proj2-quad-cpg-rl/load_sb3.py
 '''
@@ -113,6 +113,7 @@ x_prev, y_prev = 0, 0
 dist_per_trail = []
 hist_COT = []
 step_energy_curve = []
+energy_curve = []
 
 for i in range(steps):
     action, _states = model.predict(obs,deterministic=False) # sample at test time? ([TODO]: test)
@@ -166,7 +167,7 @@ for i in range(steps):
       logger.debug('step_energy at i={}: {}'.format(start_i, step_energy))
       step_energy = 0
     energy += step_energy
-    
+    energy_curve.append(energy)
     # if np.array_equal(q_hist, [0]*12):
     #   logger.debug('q_hist is reset to 0')
     # logger.info('Current dq: {}; current torque: {}; product: {}'.format(q - q_hist, motor_torques[i, :, :].ravel(), (q - q_hist) * motor_torques[i, :, :].ravel()))
@@ -206,10 +207,6 @@ for i in range(steps):
           steps = i
           break
     
-
-
-
-
 
 
 """
@@ -285,9 +282,13 @@ for i in range(4):
   ax[i].legend()
 plt.tight_layout()
 
+# Plot step energy curve
+fig, ax = plt.subplots()
+ax.plot(t, step_energy_curve[1:] if only_once else step_energy_curve, label='Step Energy')
+ax.set(title='Step Energy curve', xlabel='steps', ylabel='Step Energy')
 # Plot energy curve
 fig, ax = plt.subplots()
-ax.plot(t, step_energy_curve[1:], label='Step Energy')
+ax.plot(t, energy_curve[1:] if only_once else energy_curve, label=' Energy')
 ax.set(title='Energy curve', xlabel='steps', ylabel='Energy')
 
 plt.show()
