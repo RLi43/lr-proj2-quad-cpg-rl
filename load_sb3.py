@@ -2,7 +2,7 @@
 Author: Chengkun Li
 LastEditors: Chengkun Li
 Date: 2021-12-01 02:23:02
-LastEditTime: 2022-01-07 01:40:19
+LastEditTime: 2022-01-07 14:48:40
 Description: Modify here please
 FilePath: /lr-proj2-quad-cpg-rl/load_sb3.py
 '''
@@ -38,10 +38,10 @@ from utils.utils import plot_results
 from utils.file_utils import get_latest_model, load_all_results
 
 
-LEARNING_ALG = "PPO"
+LEARNING_ALG = ""
 interm_dir = "./logs/intermediate_models/"
 # path to saved models, i.e. interm_dir + '111121133812'
-log_dir = interm_dir + '010422010556'
+log_dir = interm_dir + ''
 
 # initialize env configs (render at test time)
 # check ideal conditions, as well as robustness to UNSEEN noise during training
@@ -52,7 +52,7 @@ env_config['render'] = True
 env_config['record_video'] = False
 env_config['add_noise'] = False 
 env_config['test_env'] = False
-env_config['competition_env'] = True
+env_config['competition_env'] = False
 env_config['dy_rand'] = False # for training! only for validation!
 
 
@@ -86,12 +86,13 @@ print("\nLoaded model", model_name, "\n")
 obs = env.reset()
 episode_reward = 0
 
-# [TODO] initialize arrays to save data from simulation 
-#
+
+
+leg_name = ['FR', 'FL', 'RR', 'RL']
 
 steps = 5000
 # Plot only one trial
-only_once = False
+only_once = True
 base_linear = np.zeros([steps, 3])
 base_angular = np.zeros([steps, 3])
 motor_angles = np.zeros([steps, 4, 3])
@@ -111,6 +112,7 @@ x, y = 0, 0
 x_prev, y_prev = 0, 0
 dist_per_trail = []
 hist_COT = []
+step_energy_curve = []
 
 for i in range(steps):
     action, _states = model.predict(obs,deterministic=False) # sample at test time? ([TODO]: test)
@@ -153,18 +155,18 @@ for i in range(steps):
     step_energy = sum((q - q_hist) * motor_torques[i, :, :].ravel())
     # logger.debug("{}, {}, {}".format((q - q_hist),  motor_torques[i, :, :].ravel(), (q - q_hist) * motor_torques[i, :, :].ravel()))
     
-    # ISSUES: there are abnormal energy values at the beginning of joint pd control
+    # ISSUES: there are abnormal energy values at the beginning of control
     # current solution: remove them from the total energy calculation
+    step_energy_curve.append(step_energy)
+    if step_energy < -20:
+      logger.debug('step energy less than -20!: {}'.format(step_energy))
     if i == start_i:
       logger.debug('step_energy at i={}: {}'.format(start_i, step_energy))
-      if env_config['motor_control_mode'] == "CARTESIAN_PD":
-        step_energy = 0
+      step_energy = 0
     energy += step_energy
-    if energy < 0:
-      # logger.warning('Energy is negative now!')
-      pass
-    if np.array_equal(q_hist, [0]*12):
-      logger.debug('q_hist is reset to 0')
+    
+    # if np.array_equal(q_hist, [0]*12):
+    #   logger.debug('q_hist is reset to 0')
     # logger.info('Current dq: {}; current torque: {}; product: {}'.format(q - q_hist, motor_torques[i, :, :].ravel(), (q - q_hist) * motor_torques[i, :, :].ravel()))
     # logger.info('Current consumed energy: {}'.format(energy))
     q_hist = q
@@ -186,6 +188,9 @@ for i in range(steps):
         logger.info('Final base position: {}'.format(info[0]['base_pos']))
         dist_per_trail.append(info[0]['base_pos'][0])
         logger.info('Current mean of end position: {}'.format(np.mean(dist_per_trail)))
+        for i in range(4):
+          avg_height = np.mean(base_pos[:steps, 2] + foot_pos[:steps, i, 2])
+          logger.info('Average foot height of {}: {}'.format(leg_name[i], avg_height))
         episode_reward = 0
         energy = 0
         distance = 0
@@ -225,7 +230,7 @@ ax[3].set_xlabel('Time steps')
 
 # Plot foot contact information
 fig, ax = plt.subplots(nrows=2, sharex=True)
-leg_name = ['FR', 'FL', 'RR', 'RL']
+
 ax[1].set_xlabel('Time steps')
 for i in range(2):
   ax[0].plot(t, contact_info[:steps, i], label='Contact information of {}'.format(leg_name[i]))
@@ -274,5 +279,10 @@ for i in range(4):
   ax[i].set(title='Foot heights of {}'.format(leg_name[i]), xlabel='steps', ylabel='height')
 # ax.set_ylim([-30, 30])
   ax[i].legend()
+
+# Plot energy curve
+fig, ax = plt.subplots()
+ax.plot(t, step_energy_curve[1:], label='Step Energy')
+ax.set(title='Energy curve', xlabel='steps', ylabel='Energy')
 plt.tight_layout()
 plt.show()
