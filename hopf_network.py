@@ -18,6 +18,8 @@ else: # linux
 from matplotlib import pyplot as plt
 from env.quadruped_gym_env import QuadrupedGymEnv
 
+MASS = 12.454
+GRAVITY = 9.81
 FOOT_Y = 0.0838
 foot_y = FOOT_Y
 foot_x = 0
@@ -30,27 +32,21 @@ class HopfNetwork():
   """
   def __init__(self,
                 mu=1**2,                # converge to sqrt(mu)
-                # omega_swing=10*2*np.pi,  # TODO Swing Frequency
-                # omega_stance=10*2*np.pi, # TODO Stance Frequency
+                omega_swing=None,  # TODO Swing Frequency
+                omega_stance=None, # TODO Stance Frequency
                 gait="WALK",            # change depending on desired gait
-                # coupling_strength=1,    # coefficient to multiply coupling matrix
+                coupling_strength=None,    # coefficient to multiply coupling matrix
                 couple=True,            # should couple
                 time_step=0.001,        # time step 
-                ground_clearance=0.05,  # foot swing height 
-                ground_penetration=0.01,# foot stance penetration into ground 
-                robot_height=0.25,      # in nominal case (standing) 
-                des_step_len=0.04,      # desired step length 
+                ground_clearance=None,  # foot swing height 
+                ground_penetration=None,# foot stance penetration into ground 
+                robot_height=None,      # in nominal case (standing) 
+                des_step_len=None,      # desired step length 
                 ):
     
     ###############
     # initialize CPG data structures: amplitude is row 0, and phase is row 1
     self.X = np.zeros((2,4))
-
-    # save body and foot shaping
-    self._ground_clearance = ground_clearance 
-    self._ground_penetration = ground_penetration
-    self._robot_height = robot_height 
-    self._des_step_len = des_step_len
 
     # save parameters 
     self._mu = mu
@@ -60,6 +56,20 @@ class HopfNetwork():
     self._dt = time_step
     self._set_gait(gait) # _omega_swing, _omega_stance, _des_step_len, _ground_clearance, _ground_penetration
     self._coupling_strength = min(self._omega_swing,self._omega_stance)/3 * np.ones((4,4))
+
+    # save body and foot shaping
+    if omega_stance is not None:
+      self._omega_stance = omega_stance
+    if omega_swing is not None:
+      self._omega_swing = omega_swing
+    if ground_clearance is not None:
+      self._ground_clearance = ground_clearance 
+    if ground_penetration is not None:
+      self._ground_penetration = ground_penetration
+    if robot_height is not None:
+      self._robot_height = robot_height 
+    if des_step_len is not None:
+      self._des_step_len = des_step_len
 
     # set oscillator initial conditions  
     self.X[0,:] = np.ones((1,4)) * .1 #
@@ -134,6 +144,12 @@ class HopfNetwork():
 
     self.PHI_pronk = np.zeros((4,4))
 
+    # default value
+    self._des_step_len = 0.04
+    self._ground_penetration = 0.01
+    self._ground_clearance = 0.05
+    self._robot_height = 0.25
+
     global foot_y, foot_x
     if gait == "WALK":
       print('WALK')
@@ -141,45 +157,30 @@ class HopfNetwork():
       # Very slow walk: 4-leg support: duty > 3/4
       self._omega_swing = 5.0*2*np.pi
       self._omega_stance = 1.0*2*np.pi
-      # self._des_step_len = 0.04
-      # self._ground_penetration = 0.01
-      # self._ground_clearance = 0.05
     elif gait == "WALK_DIAG":
       print('WALK_DIAG')
       self.PHI = self.PHI_walk_diagonal
       # Normal walk: 3/2-leg support: 1/2 < duty < 3/4 => stance/swing in (1/3,1)
       self._omega_swing = 5.0*2*np.pi
       self._omega_stance = 3.0*2*np.pi
-      # self._des_step_len = 0.04
-      # self._ground_penetration = 0.01
-      # self._ground_clearance = 0.05
     elif gait == "AMBLE":
       print(gait) 
       self.PHI = self.PHI_walk
       # fast amble: 2/1-leg support: 1/4 < duty < 1/2 => stance/swing in (1,3)
       self._omega_swing = 10.0*2*np.pi
       self._omega_stance = 15.0*2*np.pi
-      # self._des_step_len = 0.04
-      # self._ground_penetration = 0.01
-      # self._ground_clearance = 0.05
     elif gait == "TROT" or gait == "TROT_RUN":
       print('TROT_RUN')
       self.PHI = self.PHI_trot
       # running trot: with suspension : duty < 1/2 => stance/swing > 1
       self._omega_swing = 9.0*2*np.pi
       self._omega_stance = 10*2*np.pi
-      # self._des_step_len = 0.04
-      # self._ground_penetration = 0.01
-      # self._ground_clearance = 0.05
     elif gait == "TROT_WALK":
       print('TROT_WALK')
       self.PHI = self.PHI_trot
       # walking trot: without suspension : duty > 1/2 => stance/swing < 1
       self._omega_swing = 2.2*2*np.pi
       self._omega_stance = 2.0*2*np.pi
-      # self._des_step_len = 0.04
-      # self._ground_penetration = 0.01
-      # self._ground_clearance = 0.05
     elif gait == "PACE":
       print('PACE')
       self.PHI = self.PHI_pace
@@ -202,8 +203,6 @@ class HopfNetwork():
       self._omega_swing = 6.0*2*np.pi
       self._omega_stance = 9.0*2*np.pi
       self._des_step_len = 0.05
-      #self._ground_penetration = 0.01
-      #self._ground_clearance = 0.05
     elif gait == "CANTER_TRANS" or gait == "CANTER":
       print("CANTER_TRANS") # I will never change it anymore!
       self.PHI = self.PHI_canter_transverse
@@ -232,7 +231,7 @@ class HopfNetwork():
       # running
       #foot_y = FOOT_Y * 1.2
       # 5.5, 10
-      # ---------- At least not fall down for BOUND-----
+      # ---------- At least not fall down -----
       foot_x = 0.04
       foot_y = FOOT_Y * 1.2
       self._robot_height = 0.20
@@ -289,7 +288,7 @@ class HopfNetwork():
       print('PRONK')
       self.PHI = self.PHI_pronk
       # ------- Stable ---------
-      # self._robot_height *= 0.8
+      self._robot_height = 0.20
       self._omega_swing = 11*2*np.pi
       self._omega_stance = 25.0*2*np.pi
       self._des_step_len = 0.05
@@ -316,8 +315,6 @@ class HopfNetwork():
     
     # map CPG variables to Cartesian foot xz positions (Equations 8, 9) 
     r, theta = self.X[0, :], self.X[1, :]
-    if contactInfo is not None:
-      contactBool, forceNormal = contactInfo
     x = -self._des_step_len * r * np.cos(theta) #[tODO]
     z = np.zeros(4)
     factor = 1.0
@@ -325,21 +322,10 @@ class HopfNetwork():
       if theta[i] < np.pi:
         g = self._ground_clearance 
         self.state[i] = "SWING"
-        # if contactInfo is not None and contactBool[i]:
-        #   factor = 0.9
       else:
         g = self._ground_penetration
         self.state[i] = "STANCE"
-        # if contactInfo is not None and not contactBool[i]:
-        #   factor = 1.1
-      # if i < 2:
-      #   factor = 1.25
-      # else: factor = 0.75
       z[i] = -self._robot_height + r[i]*np.sin(theta[i]) * g *factor# [tODO]
-      
-    # if body_ori is not None:
-    #   roll, pitch, yaw = body_ori
-        
 
     return x, z
       
@@ -365,16 +351,11 @@ class HopfNetwork():
         theta_dot = self._omega_swing
       else:
         theta_dot = self._omega_stance
-      
-      #theta_dot *= np.cos(theta) + 1.1 #abs(0.3+0.7*np.pi/2*np.sin(theta))
 
       # loop through other oscillators to add coupling (Equation 7)
       if self._couple:
         for j in range(4):
           delta_theta = (X[1, j] - theta - self.PHI[i, j]) #% 2*np.pi
-          # delta_theta = min(0.5*np.pi, delta_theta) 
-          # if delta_theta < 0:
-          #   delta_theta = 0
           theta_dot += X[0, j] * self._coupling_strength[i,j] * np.sin(delta_theta) # [tODO] Question?
       
       if theta_dot < 0:
@@ -389,7 +370,7 @@ class HopfNetwork():
         # Fast transitions
         # 1. during stance, support few
         # 2. during swing, contact
-        suppose_theta = theta + theta_dot*self._dt*1.1 #
+        suppose_theta = theta + theta_dot*self._dt
         if theta < np.pi: #swing
           if suppose_theta > np.pi and not contactBool[i]:
             theta_dot = 0
@@ -418,7 +399,7 @@ if __name__ == "__main__":
   ON_RACK = False
   TRACK_DIRECTION = False
   gait_direction = 0 #np.pi # forward
-  gait_name = "WALK"
+  gait_name = "PRONK"
   simulation_time = 10.0
   PLAY_SPEED = 0.25
 
@@ -442,11 +423,8 @@ if __name__ == "__main__":
                       )
   # env.add_random_boxes()
 
-
   # initialize Hopf Network, supply gait
-  cpg = HopfNetwork(time_step=TIME_STEP, gait=gait_name,
-                ground_clearance=0.05,  # foot swing height 
-                ground_penetration=0.01)# foot stance penetration into ground )
+  cpg = HopfNetwork(time_step=TIME_STEP, gait=gait_name)
 
   TEST_STEPS = int(simulation_time / (TIME_STEP))
   t = np.arange(TEST_STEPS)*TIME_STEP
@@ -499,13 +477,6 @@ if __name__ == "__main__":
       xs = np.cos(forward_direction) * xs
 
     xs += foot_x
-    if False:
-      if roll > 0:
-        ys[0] *= 1 + roll/np.pi/2
-        ys[2] *= 1 + roll/np.pi/2
-      else:
-        ys[1] *= 1 + roll/np.pi/2
-        ys[3] *= 1 + roll/np.pi/2
 
     # [tODO] get current motor angles and velocities for joint PD, see GetMotorAngles(), GetMotorVelocities() in quadruped.py
     q_last = env.robot.GetMotorAngles()
@@ -566,15 +537,11 @@ if __name__ == "__main__":
     loop_time = time.time() - total_starter
     if env._is_render:
       if loop_time < TIME_STEP/PLAY_SPEED*(j+1):
-      # print("sleep", TIME_STEP - loop_time)
         time.sleep(TIME_STEP/PLAY_SPEED*(j+1) - loop_time)
-      # else:
-      #   print("\rovertime", loop_time - TIME_STEP/PLAY_SPEED*(j+1), end="")
 
   cur_position = env.robot.GetBasePosition()
   distance_traveled = np.linalg.norm(cur_position)
   env.close()
-
 
   ##################################################### 
   # PLOTS
@@ -583,7 +550,7 @@ if __name__ == "__main__":
   enery_cost = sum(enery_cost)
   print("Energy Cost:", enery_cost)
   print("Distance Traveled:", distance_traveled)
-  print("Cost of Transport:", enery_cost/distance_traveled)
+  print("Cost of Transport:", enery_cost/(distance_traveled * GRAVITY * MASS))
   print("average abs(pitch):", np.mean(abs(orientation_history[:,1])))
   print("orientation variance:", np.var(orientation_history, axis=0))
   print("average x-y speed(last50%)", np.mean(np.linalg.norm(speed_history[int(len(t)/2):, :2], axis=1)))
