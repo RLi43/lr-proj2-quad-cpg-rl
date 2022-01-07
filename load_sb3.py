@@ -25,11 +25,11 @@ from utils.utils import plot_results
 from utils.file_utils import get_latest_model, load_all_results
 
 
-# LEARNING_ALG = "PPO"
-LEARNING_ALG = "SAC"
+LEARNING_ALG = "PPO"
+# LEARNING_ALG = "SAC"
 interm_dir = "./logs/intermediate_models/"
 # path to saved models, i.e. interm_dir + '111121133812'
-log_dir = interm_dir + '010622112821'
+log_dir = interm_dir + '010122140144'
 
 # initialize env configs (render at test time)
 # check ideal conditions, as well as robustness to UNSEEN noise during training
@@ -38,9 +38,9 @@ env_config = {"motor_control_mode":"CARTESIAN_PD",
                "task_env": "LR_COURSE_TASK",
                "observation_space_mode": "LR_COURSE_OBS"}
 env_config['render'] = True
-env_config['record_video'] = True
+env_config['record_video'] = False
 env_config['add_noise'] = False 
-env_config['competition_env'] = True
+env_config['competition_env'] = False
 
 # get latest model and normalization stats, and plot 
 stats_path = os.path.join(log_dir, "vec_normalize.pkl")
@@ -74,25 +74,83 @@ episode_reward = 0
 # Motor_vel = np.zeros((2000, 12))
 # Motor_torq = np.zeros((2000, 12))
 # Base_orient = np.zeros((2000, 4))
-States = np.zeros((2000, 84))
 
-Forces_n = np.zeros((2000, 4))
+num_steps = 2000
 
-for i in range(2000):
+States = np.zeros((num_steps, 84))
+Forces_n = np.zeros((num_steps, 4))
+
+Vel = np.zeros((num_steps, 1))
+Foot_z = np.zeros((num_steps, 4))
+Energy = np.zeros((num_steps, 1))
+Contact_bool = np.zeros((num_steps, 4))
+
+q_prev = np.zeros(12)
+foot_p = np.zeros(12)
+idx_init = 0
+
+mass = 12.454
+g_acc = 9.8
+
+vel_avg = []
+foot_z_avg = []
+cot_avg = []
+x_base_avg = []
+duty_factor_avg = []
+
+for i in range(num_steps):
     action, _states = model.predict(obs,deterministic=False) # sample at test time? ([TODO]: test)
     obs, rewards, dones, info = env.step(action)
     episode_reward += rewards
+
+    Vel[i, 0] = np.linalg.norm(env.envs[0].env.robot.GetBaseLinearVelocity())
+
+    for j in range(4):
+        _, foot_p[3*j:3*j+3] = env.envs[0].env.robot.ComputeJacobianAndPosition(j)
+
+    Foot_z[i, :] = foot_p[2:12:3]
+    robot_base = np.array(env.envs[0].env.robot.GetBasePosition())
+    robot_height = robot_base[2]
+    Foot_z[i, :] += robot_height
+
+    q = np.array(env.envs[0].env.robot.GetMotorAngles())
+    q_dot = q - q_prev
+    q_prev = q
+    torques = env.envs[0].env.robot.GetMotorTorques()
+    Energy[i, 0] = np.dot(q_dot, torques)
+
+    Contact_bool[i, :] = np.array(env.envs[0].env.robot.GetContactInfo()[3])
+
     if dones:
         print('episode_reward', episode_reward)
         print('Final base position', info[0]['base_pos'])
         episode_reward = 0
+
+        final_base = np.array(info[0]['base_pos'])
+
+        vel = Vel[idx_init:i]
+        foot_z = Foot_z[idx_init:i]
+        energy = Energy[idx_init+1:i]
+        contact_bool = Contact_bool[idx_init:i]
+
+        vel_avg.append(np.mean(vel))
+        foot_z_avg.append(np.mean(foot_z, axis=0))
+
+        x_base_avg.append(final_base[0])
+        
+        dist = np.linalg.norm(final_base[0:2])
+        cot_avg.append(np.sum(energy)/mass/g_acc/dist)
+
+        duty_factor_avg.append(np.mean(contact_bool, axis=0))
+
+        idx_init = i
 
     # [TODO] save data from current robot states for plots 
     # To get base position, for example: env.envs[0].env.robot.GetBasePosition() 
     States[i, 0:3] = env.envs[0].env.robot.GetBasePosition()
     States[i, 3:84] = env.envs[0].env._observation
 
-    Forces_n[i, :] = env.envs[0].env.robot.GetContactInfo()[2]
+    # Forces_n[i, :] = env.envs[0].env.robot.GetContactInfo()[2]
 
     # if i == 500:
     #   # env.envs[0].env._cmd_base_vel_normed = np.array([np.cos(np.pi/6*2), np.sin(np.pi/6*2), 0.0])
@@ -107,7 +165,7 @@ for i in range(2000):
     
 # [TODO] make plots:
 time_step = env.envs[0].env._time_step
-t = np.arange(2000)*time_step
+t = np.arange(num_steps)*time_step
 
 Base_pos = States[:, 0:3]
 base_x = States[:, 0]
@@ -128,15 +186,28 @@ ofile = open('robot_states_rl.csv', 'wb')
 np.savetxt(ofile, States, delimiter=',')
 ofile.close()
 
-print('\n\n')
-print('Max Normal Force: ')
-print(np.amax(Forces_n, axis=0))
-print(np.mean(Forces_n, axis=0))
-print('\n\n')
+print("\n@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@")
+print(vel_avg)
+print(np.mean(vel_avg))
+print(foot_z_avg)
+print(np.mean(foot_z_avg, axis=0))
+print(x_base_avg)
+print(np.mean(x_base_avg))
+print(cot_avg)
+print(np.mean(cot_avg))
+print(duty_factor_avg)
+print(np.mean(duty_factor_avg, axis=0))
+print("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n")
 
-ofile = open('normal_forces.csv', 'wb')
-np.savetxt(ofile, Forces_n, delimiter=',')
-ofile.close()
+# print('\n\n')
+# print('Max Normal Force: ')
+# print(np.amax(Forces_n, axis=0))
+# print(np.mean(Forces_n, axis=0))
+# print('\n\n')
+
+# ofile = open('normal_forces.csv', 'wb')
+# np.savetxt(ofile, Forces_n, delimiter=',')
+# ofile.close()
 
 # max normal forces
 # [911 842 952 776]
