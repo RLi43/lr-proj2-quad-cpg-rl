@@ -2,7 +2,7 @@
 Author: Chengkun Li
 LastEditors: Chengkun Li
 Date: 2021-12-01 02:23:02
-LastEditTime: 2022-01-07 15:28:58
+LastEditTime: 2022-01-07 16:15:09
 Description: Modify here please
 FilePath: /lr-proj2-quad-cpg-rl/load_sb3.py
 '''
@@ -59,6 +59,7 @@ env_config['dy_rand'] = False # for training! only for validation!
 
 plot_monitor = True
 
+settle_time = 300
 
 # get latest model and normalization stats, and plot 
 stats_path = os.path.join(log_dir, "vec_normalize.pkl")
@@ -92,7 +93,7 @@ leg_name = ['FR', 'FL', 'RR', 'RL']
 
 steps = 5000
 # Plot only one trial
-only_once = True
+only_once = False
 base_linear = np.zeros([steps, 3])
 base_angular = np.zeros([steps, 3])
 motor_angles = np.zeros([steps, 4, 3])
@@ -113,13 +114,16 @@ x_prev, y_prev = 0, 0
 dist_per_trail = []
 hist_COT = []
 step_energy_curve = []
+energy_curve = []
 
 for i in range(steps):
     action, _states = model.predict(obs,deterministic=False) # sample at test time? ([TODO]: test)
     # logging.info(type(_states))
-    # logger.info(action)
-    # if i < 120:
-    #   action = np.array([0.0] * 12)
+    if i < start_i+settle_time:
+      # logger.warning("settling the quadruped")
+      action = np.array([0.0] * 12)
+    if i == start_i+settle_time + 1:
+      logger.info("settling done!")
     obs, rewards, dones, info = env.step(action)
     
     base_pos[i, :] = env.envs[0].env.robot.GetBasePosition()
@@ -165,8 +169,14 @@ for i in range(steps):
     if i == start_i:
       logger.debug('step_energy at i={}: {}'.format(start_i, step_energy))
       step_energy = 0
-    energy += step_energy
     
+    # remove step energy at settling time
+    if start_i <= i <= start_i+settle_time:
+      step_energy = 0
+
+    energy += step_energy
+    energy_curve.append(energy)
+    logger.debug('current energy: {}, current step energy: {}'.format(energy, step_energy))
     # if np.array_equal(q_hist, [0]*12):
     #   logger.debug('q_hist is reset to 0')
     # logger.info('Current dq: {}; current torque: {}; product: {}'.format(q - q_hist, motor_torques[i, :, :].ravel(), (q - q_hist) * motor_torques[i, :, :].ravel()))
@@ -285,9 +295,14 @@ for i in range(4):
   ax[i].legend()
 plt.tight_layout()
 
+# Plot step energy curve
+fig, ax = plt.subplots()
+ax.plot(t, step_energy_curve, label='Step Energy')
+ax.set(title='Step Energy curve', xlabel='steps', ylabel='Step Energy')
+
 # Plot energy curve
 fig, ax = plt.subplots()
-ax.plot(t, step_energy_curve[1:], label='Step Energy')
+ax.plot(t, energy_curve, label='Step Energy')
 ax.set(title='Energy curve', xlabel='steps', ylabel='Energy')
 
 plt.show()
