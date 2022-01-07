@@ -1,0 +1,4 @@
+This is trained with PPO
+weight = 0.004
+Controller = CARTESIAN_PD
+with learning rate of 5e-5
