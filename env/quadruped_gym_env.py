@@ -335,7 +335,7 @@ class QuadrupedGymEnv(gym.Env):
     robot_height = 0.25
     foot_z += robot_height
     # foot height should be in a resonable range
-    max_ground_clearance = 0.12
+    max_ground_clearance = 0.13
     foot_z[foot_z > max_ground_clearance] = max_ground_clearance
     # foot height could be smaller than -robot_height --> ground penetration
     foot_z[foot_z < 0] = 0
@@ -356,7 +356,8 @@ class QuadrupedGymEnv(gym.Env):
     # reward = 0.05*rwd_linear_vel + 0.02*rwd_base_motion + 0.03*rwd_base_level + 0.05*rwd_speed + 0.02*rwd_orient + 0.01*rwd_ft_hgt + 0.0001*rwd_energy  # PPO --> 2 attempts
     # reward = 0.07*rwd_linear_vel + 0.02*rwd_base_motion + 0.03*rwd_base_level + 0.05*rwd_speed + 0.02*rwd_orient + 0.005*rwd_ft_hgt + 0.0001*rwd_energy  # PPO
     # reward = 0.1*rwd_linear_vel + 0.05*rwd_base_motion + 0.03*rwd_base_level + 0.05*rwd_speed + 0.02*rwd_orient + 0.005*rwd_ft_hgt + 0.0001*rwd_energy  # PPO
-    reward = 0.1*rwd_linear_vel + 0.05*rwd_base_motion + 0.03*rwd_base_level + 0.05*rwd_speed + 0.02*rwd_orient + 0.00001*rwd_energy  # PPO
+    # reward = 0.1*rwd_linear_vel + 0.05*rwd_base_motion + 0.03*rwd_base_level + 0.05*rwd_speed + 0.02*rwd_orient + 0.00001*rwd_energy  # PPO
+    reward = 0.05*rwd_linear_vel + 0.02*rwd_base_motion + 0.03*rwd_base_level + 0.05*rwd_speed + 0.02*rwd_orient + 0.02*rwd_ft_hgt + 0.00001*rwd_energy  # SAC
 
     return reward
 

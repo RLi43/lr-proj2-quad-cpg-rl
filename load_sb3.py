@@ -25,11 +25,11 @@ from utils.utils import plot_results
 from utils.file_utils import get_latest_model, load_all_results
 
 
-LEARNING_ALG = "PPO"
-# LEARNING_ALG = "SAC"
+# LEARNING_ALG = "PPO"
+LEARNING_ALG = "SAC"
 interm_dir = "./logs/intermediate_models/"
 # path to saved models, i.e. interm_dir + '111121133812'
-log_dir = interm_dir + '010422052235'
+log_dir = interm_dir + '010622112821'
 
 # initialize env configs (render at test time)
 # check ideal conditions, as well as robustness to UNSEEN noise during training
@@ -40,7 +40,7 @@ env_config = {"motor_control_mode":"CARTESIAN_PD",
 env_config['render'] = True
 env_config['record_video'] = True
 env_config['add_noise'] = False 
-env_config['competition_env'] = False
+env_config['competition_env'] = True
 
 # get latest model and normalization stats, and plot 
 stats_path = os.path.join(log_dir, "vec_normalize.pkl")
@@ -94,16 +94,16 @@ for i in range(2000):
 
     Forces_n[i, :] = env.envs[0].env.robot.GetContactInfo()[2]
 
-    if i == 500:
-      # env.envs[0].env._cmd_base_vel_normed = np.array([np.cos(np.pi/6*2), np.sin(np.pi/6*2), 0.0])
-      env.envs[0].env._cmd_base_vel_normed = np.array([np.cos(np.pi/6*3), np.sin(np.pi/6*3), 0.0])
-      print(f'>>>>>>>>>> Current cmd vel is: {np.array2string(env.envs[0].env._cmd_base_vel_normed, precision=4, separator=",")}')
-    elif i == 1000:
-      env.envs[0].env._cmd_base_vel_normed = np.array([np.cos(np.pi/6*0), np.sin(np.pi/6*0), 0.0])
-      print(f'>>>>>>>>>> Current cmd vel is: {np.array2string(env.envs[0].env._cmd_base_vel_normed, precision=4, separator=",")}')
-    elif i == 1500:
-      env.envs[0].env._cmd_base_vel_normed = np.array([np.cos(np.pi/6*3), np.sin(np.pi/6*3), 0.0])
-      print(f'>>>>>>>>>> Current cmd vel is: {np.array2string(env.envs[0].env._cmd_base_vel_normed, precision=4, separator=",")}')
+    # if i == 500:
+    #   # env.envs[0].env._cmd_base_vel_normed = np.array([np.cos(np.pi/6*2), np.sin(np.pi/6*2), 0.0])
+    #   env.envs[0].env._cmd_base_vel_normed = np.array([np.cos(np.pi/6*3), np.sin(np.pi/6*3), 0.0])
+    #   print(f'>>>>>>>>>> Current cmd vel is: {np.array2string(env.envs[0].env._cmd_base_vel_normed, precision=4, separator=",")}')
+    # elif i == 1000:
+    #   env.envs[0].env._cmd_base_vel_normed = np.array([np.cos(np.pi/6*0), np.sin(np.pi/6*0), 0.0])
+    #   print(f'>>>>>>>>>> Current cmd vel is: {np.array2string(env.envs[0].env._cmd_base_vel_normed, precision=4, separator=",")}')
+    # elif i == 1500:
+    #   env.envs[0].env._cmd_base_vel_normed = np.array([np.cos(np.pi/6*3), np.sin(np.pi/6*3), 0.0])
+    #   print(f'>>>>>>>>>> Current cmd vel is: {np.array2string(env.envs[0].env._cmd_base_vel_normed, precision=4, separator=",")}')
     
 # [TODO] make plots:
 time_step = env.envs[0].env._time_step
