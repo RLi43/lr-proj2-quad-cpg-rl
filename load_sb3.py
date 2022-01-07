@@ -2,7 +2,7 @@
 Author: Chengkun Li
 LastEditors: Chengkun Li
 Date: 2021-12-01 02:23:02
-LastEditTime: 2022-01-07 14:48:40
+LastEditTime: 2022-01-07 15:28:58
 Description: Modify here please
 FilePath: /lr-proj2-quad-cpg-rl/load_sb3.py
 '''
@@ -38,10 +38,10 @@ from utils.utils import plot_results
 from utils.file_utils import get_latest_model, load_all_results
 
 
-LEARNING_ALG = ""
+LEARNING_ALG = "SAC"
 interm_dir = "./logs/intermediate_models/"
 # path to saved models, i.e. interm_dir + '111121133812'
-log_dir = interm_dir + ''
+log_dir = interm_dir + '010622232159'
 
 # initialize env configs (render at test time)
 # check ideal conditions, as well as robustness to UNSEEN noise during training
@@ -118,6 +118,8 @@ for i in range(steps):
     action, _states = model.predict(obs,deterministic=False) # sample at test time? ([TODO]: test)
     # logging.info(type(_states))
     # logger.info(action)
+    # if i < 120:
+    #   action = np.array([0.0] * 12)
     obs, rewards, dones, info = env.step(action)
     
     base_pos[i, :] = env.envs[0].env.robot.GetBasePosition()
@@ -179,18 +181,20 @@ for i in range(steps):
     distance += np.sqrt(dx**2 + dy**2)
     # logger.info('robot contact normal force: {}'.format(env.envs[0].env.robot.GetContactInfo()[2]))
     if dones:
+        print("=================== Overview ===================")
         logger.info('episode_reward: {}'.format(episode_reward))
+        logger.info('Average speed: {}'.format(np.mean(np.sqrt(base_linear[:steps, 0]**2 + base_linear[:steps, 1]**2))))
+        for foot in range(4):
+          avg_height = np.mean(base_pos[:steps, 2] + foot_pos[:steps, foot, 2])
+          logger.info('Average foot height of {}: {}'.format(leg_name[foot], avg_height))
+        logger.info('Final base position: {}'.format(info[0]['base_pos']))
         logger.info('Total energy is {}'.format(energy))
-        logger.info('Total distance traveled: {}', distance)
+        dist_per_trail.append(info[0]['base_pos'][0])
+        logger.info('Current mean of end position: {}'.format(np.mean(dist_per_trail)))
+        # logger.info('Total distance traveled: {}', distance)
         COT = energy/distance
         hist_COT.append(COT)
         logger.info('Current mean of COT = {}; COT of this trail: {}'.format(np.mean(hist_COT), COT))
-        logger.info('Final base position: {}'.format(info[0]['base_pos']))
-        dist_per_trail.append(info[0]['base_pos'][0])
-        logger.info('Current mean of end position: {}'.format(np.mean(dist_per_trail)))
-        for i in range(4):
-          avg_height = np.mean(base_pos[:steps, 2] + foot_pos[:steps, i, 2])
-          logger.info('Average foot height of {}: {}'.format(leg_name[i], avg_height))
         episode_reward = 0
         energy = 0
         distance = 0
@@ -279,10 +283,11 @@ for i in range(4):
   ax[i].set(title='Foot heights of {}'.format(leg_name[i]), xlabel='steps', ylabel='height')
 # ax.set_ylim([-30, 30])
   ax[i].legend()
+plt.tight_layout()
 
 # Plot energy curve
 fig, ax = plt.subplots()
 ax.plot(t, step_energy_curve[1:], label='Step Energy')
 ax.set(title='Energy curve', xlabel='steps', ylabel='Energy')
-plt.tight_layout()
+
 plt.show()
