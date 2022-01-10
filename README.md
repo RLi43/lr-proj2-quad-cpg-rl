@@ -1,6 +1,6 @@
 # Legged Robots Project 2
 
-Author: Jiangfan Li, Shuhan Li, Chengkun Li
+Author: Jiangfan Li, Shuhan He, Chengkun Li
 
 Report: https://www.overleaf.com/read/zkthgpqkjygg
 
